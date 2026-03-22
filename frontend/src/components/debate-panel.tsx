@@ -1,6 +1,5 @@
 "use client";
 
-import { Separator } from "@/components/ui/separator";
 import BuilderPanel from "./builder-panel";
 import CriticPanel from "./critic-panel";
 
@@ -31,7 +30,8 @@ export default function DebatePanel({
 }: DebatePanelProps) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden md:flex-row">
-      <div className="flex-1 overflow-hidden">
+      {/* Builder (left) */}
+      <div className="flex-1 overflow-hidden border-r border-neutral-800/30">
         <BuilderPanel
           rounds={builderRounds}
           isStreaming={builderStreaming}
@@ -39,8 +39,11 @@ export default function DebatePanel({
           currentRound={currentRound}
         />
       </div>
-      <Separator orientation="vertical" className="hidden bg-neutral-800 md:block" />
-      <Separator className="bg-neutral-800 md:hidden" />
+
+      {/* Divider - visible on mobile */}
+      <div className="h-px bg-neutral-800/30 md:hidden" />
+
+      {/* Critic (right) */}
       <div className="flex-1 overflow-hidden">
         <CriticPanel
           rounds={criticRounds}

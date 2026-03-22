@@ -172,37 +172,76 @@ export default function Home() {
     setStatus("idle");
   }, [resetState]);
 
+  const maxRounds = settings.maxRounds;
+  const isIdle = status === "idle";
+
   return (
     <div className="flex h-screen flex-col bg-black">
-      <header className="flex items-center justify-between border-b border-neutral-800 px-4 py-2">
-        <div className="flex items-center gap-3">
-          <h1 className="font-mono text-sm font-bold tracking-wider text-neutral-200">
-            DueLLM
+      {/* Header */}
+      <header className="flex items-center justify-between border-b border-neutral-800 px-5 py-3">
+        <div className="flex items-center gap-4">
+          <h1 className="font-mono text-base font-bold tracking-widest text-white">
+            Due<span className="text-neutral-500">LLM</span>
           </h1>
+
           {status === "running" && (
-            <Badge
-              variant="outline"
-              className="border-yellow-900 text-yellow-500 text-[10px]"
-            >
-              Round {currentRound}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-yellow-500" />
+              <span className="font-mono text-[11px] text-yellow-500">
+                Round {currentRound}/{maxRounds}
+              </span>
+              {/* Progress dots */}
+              <div className="flex gap-1">
+                {Array.from({ length: maxRounds }, (_, i) => (
+                  <div
+                    key={i}
+                    className={`h-1 w-3 rounded-full transition-colors ${
+                      i < currentRound
+                        ? "bg-yellow-500"
+                        : i === currentRound - 1
+                        ? "animate-pulse bg-yellow-500"
+                        : "bg-neutral-800"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
           )}
+
           {status === "converged" && (
-            <Badge className="bg-green-950 text-green-400 text-[10px] border-green-900">
-              Converged
-            </Badge>
+            <div className="flex items-center gap-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
+              <span className="font-mono text-[11px] text-green-400">
+                Converged in {currentRound} round{currentRound !== 1 ? "s" : ""}
+              </span>
+            </div>
           )}
+
+          {status === "stopped" && finalSolution && (
+            <div className="flex items-center gap-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-neutral-500" />
+              <span className="font-mono text-[11px] text-neutral-500">
+                Stopped at round {currentRound}
+              </span>
+            </div>
+          )}
+
           {status === "error" && (
-            <Badge className="bg-red-950 text-red-400 text-[10px] border-red-900">
-              Error
-            </Badge>
+            <div className="flex items-center gap-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-red-500" />
+              <span className="font-mono text-[11px] text-red-400">
+                Error
+              </span>
+            </div>
           )}
         </div>
-        <span className="text-[10px] text-neutral-700">
-          Two LLMs debate to produce better code
+
+        <span className="hidden text-[11px] tracking-wide text-neutral-600 sm:block">
+          adversarial code refinement
         </span>
       </header>
 
+      {/* Prompt */}
       <PromptInput
         onSubmit={handleSubmit}
         onStop={handleStop}
@@ -210,22 +249,68 @@ export default function Home() {
         onOpenSettings={() => setSettingsOpen(true)}
       />
 
+      {/* Error */}
       {error && (
-        <div className="border-b border-red-900 bg-red-950/50 px-4 py-2 text-xs text-red-400">
-          {error}
+        <div className="flex items-center gap-2 border-b border-red-900/50 bg-red-950/30 px-5 py-2">
+          <div className="h-1 w-1 rounded-full bg-red-500" />
+          <span className="font-mono text-xs text-red-400">{error}</span>
         </div>
       )}
 
-      <DebatePanel
-        builderRounds={builderRounds}
-        criticRounds={criticRounds}
-        builderStreaming={builderStreaming}
-        criticStreaming={criticStreaming}
-        builderStreamContent={builderStreamContent}
-        criticStreamContent={criticStreamContent}
-        currentRound={currentRound}
-      />
+      {/* Empty state */}
+      {isIdle && builderRounds.length === 0 && (
+        <div className="flex flex-1 flex-col items-center justify-center gap-6 px-4">
+          <div className="flex flex-col items-center gap-3">
+            <div className="flex items-center gap-4 text-neutral-700">
+              <div className="flex h-10 w-10 items-center justify-center rounded border border-neutral-800">
+                <span className="font-mono text-xs">A</span>
+              </div>
+              <div className="flex flex-col items-center gap-0.5">
+                <div className="h-px w-8 bg-neutral-800" />
+                <span className="text-[9px] text-neutral-700">vs</span>
+                <div className="h-px w-8 bg-neutral-800" />
+              </div>
+              <div className="flex h-10 w-10 items-center justify-center rounded border border-neutral-800">
+                <span className="font-mono text-xs">B</span>
+              </div>
+            </div>
+            <p className="max-w-sm text-center text-sm leading-relaxed text-neutral-600">
+              Describe a coding or architecture problem. Two LLMs will debate
+              to produce a battle-tested solution.
+            </p>
+          </div>
+          <div className="flex flex-wrap justify-center gap-2">
+            {[
+              "Design a rate limiter in Python",
+              "Build a pub/sub event system",
+              "Implement JWT auth middleware",
+            ].map((example) => (
+              <button
+                key={example}
+                onClick={() => handleSubmit(example)}
+                className="rounded border border-neutral-800 px-3 py-1.5 font-mono text-[11px] text-neutral-500 transition-colors hover:border-neutral-600 hover:text-neutral-300"
+              >
+                {example}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
+      {/* Debate panels */}
+      {(!isIdle || builderRounds.length > 0) && (
+        <DebatePanel
+          builderRounds={builderRounds}
+          criticRounds={criticRounds}
+          builderStreaming={builderStreaming}
+          criticStreaming={criticStreaming}
+          builderStreamContent={builderStreamContent}
+          criticStreamContent={criticStreamContent}
+          currentRound={currentRound}
+        />
+      )}
+
+      {/* Final solution */}
       {finalSolution && (
         <FinalSolution
           solution={finalSolution}
@@ -233,6 +318,7 @@ export default function Home() {
         />
       )}
 
+      {/* Settings */}
       <SettingsDialog
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}

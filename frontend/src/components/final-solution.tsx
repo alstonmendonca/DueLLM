@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import StreamingText from "./streaming-text";
 
 interface FinalSolutionProps {
@@ -23,32 +22,30 @@ export default function FinalSolution({
   };
 
   return (
-    <div className="border-t border-neutral-800 bg-neutral-950">
-      <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-2">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium uppercase tracking-wider text-neutral-500">
+    <div className="border-t border-green-900/30 bg-green-950/10">
+      <div className="flex items-center justify-between border-b border-neutral-800/50 px-5 py-2.5">
+        <div className="flex items-center gap-3">
+          <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
+          <span className="font-mono text-xs font-medium tracking-wide text-green-400">
             Final Solution
           </span>
-          <Badge className="bg-green-950 text-green-400 text-[10px] border-green-900">
-            Converged
-          </Badge>
         </div>
         <div className="flex gap-2">
           <Button
             onClick={handleCopy}
             variant="outline"
             size="sm"
-            className="h-7 border-neutral-800 text-xs text-neutral-400 hover:text-neutral-200"
+            className="h-7 border-neutral-800 font-mono text-[11px] text-neutral-500 hover:border-neutral-700 hover:text-neutral-300"
           >
-            {copied ? "Copied" : "Copy"}
+            {copied ? "copied" : "copy"}
           </Button>
           <Button
             onClick={onNewDebate}
             variant="outline"
             size="sm"
-            className="h-7 border-neutral-800 text-xs text-neutral-400 hover:text-neutral-200"
+            className="h-7 border-neutral-800 font-mono text-[11px] text-neutral-500 hover:border-neutral-700 hover:text-neutral-300"
           >
-            New Debate
+            new debate
           </Button>
         </div>
       </div>

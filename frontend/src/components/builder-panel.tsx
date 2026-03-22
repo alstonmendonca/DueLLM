@@ -1,6 +1,5 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
 import StreamingText from "./streaming-text";
 
 interface BuilderPanelProps {
@@ -16,40 +15,51 @@ export default function BuilderPanel({
   currentStreamContent,
   currentRound,
 }: BuilderPanelProps) {
+  const hasContent = rounds.length > 0 || isStreaming;
+
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b border-neutral-800 px-4 py-2">
-        <span className="text-xs font-medium uppercase tracking-wider text-neutral-500">
+      {/* Header */}
+      <div className="flex items-center gap-3 border-b border-neutral-800/50 px-4 py-2.5">
+        <div className="flex h-5 w-5 items-center justify-center rounded bg-neutral-800">
+          <span className="font-mono text-[10px] font-bold text-neutral-400">A</span>
+        </div>
+        <span className="text-xs font-medium tracking-wide text-neutral-400">
           Builder
         </span>
-        <Badge variant="outline" className="border-neutral-700 text-neutral-500 text-[10px]">
-          LLM A
-        </Badge>
+        {isStreaming && (
+          <div className="flex items-center gap-1.5">
+            <div className="h-1 w-1 animate-pulse rounded-full bg-yellow-500" />
+            <span className="text-[10px] text-yellow-600">generating</span>
+          </div>
+        )}
       </div>
-      <div className="flex-1 overflow-hidden">
-        {rounds.length === 0 && !isStreaming ? (
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">
+        {!hasContent ? (
           <div className="flex h-full items-center justify-center">
-            <p className="text-sm text-neutral-700">
-              Waiting for prompt...
+            <p className="font-mono text-xs text-neutral-800">
+              awaiting prompt
             </p>
           </div>
         ) : (
-          <div className="h-full overflow-y-auto">
+          <>
             {rounds.map((r) => (
-              <div key={r.round} className="border-b border-neutral-900">
-                <div className="px-4 pt-3 pb-1">
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">
-                    Round {r.round}
+              <div key={r.round}>
+                <div className="sticky top-0 z-10 border-b border-neutral-900/50 bg-black/80 px-4 py-1.5 backdrop-blur-sm">
+                  <span className="font-mono text-[10px] font-medium text-neutral-600">
+                    round {r.round}
                   </span>
                 </div>
                 <StreamingText content={r.content} isStreaming={false} />
               </div>
             ))}
             {isStreaming && (
-              <div className="border-b border-neutral-900">
-                <div className="px-4 pt-3 pb-1">
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">
-                    Round {currentRound}
+              <div>
+                <div className="sticky top-0 z-10 border-b border-neutral-900/50 bg-black/80 px-4 py-1.5 backdrop-blur-sm">
+                  <span className="font-mono text-[10px] font-medium text-yellow-600">
+                    round {currentRound}
                   </span>
                 </div>
                 <StreamingText
@@ -58,7 +68,7 @@ export default function BuilderPanel({
                 />
               </div>
             )}
-          </div>
+          </>
         )}
       </div>
     </div>
