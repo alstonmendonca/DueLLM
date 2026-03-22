@@ -22,11 +22,11 @@ export default function FinalSolution({
   };
 
   return (
-    <div className="border-t border-green-900/30 bg-green-950/10">
-      <div className="flex items-center justify-between border-b border-neutral-800/50 px-5 py-2.5">
+    <div className="border-t border-[#F0EDE5]/15">
+      <div className="flex items-center justify-between border-b border-[#F0EDE5]/8 px-5 py-2.5">
         <div className="flex items-center gap-3">
-          <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
-          <span className="font-mono text-xs font-medium tracking-wide text-green-400">
+          <div className="h-1.5 w-1.5 rounded-full bg-[#F0EDE5]" />
+          <span className="font-mono text-xs font-medium tracking-wide text-[#F0EDE5]/60">
             Final Solution
           </span>
         </div>
@@ -35,7 +35,7 @@ export default function FinalSolution({
             onClick={handleCopy}
             variant="outline"
             size="sm"
-            className="h-7 border-neutral-800 font-mono text-[11px] text-neutral-500 hover:border-neutral-700 hover:text-neutral-300"
+            className="h-7 border-[#F0EDE5]/15 bg-transparent font-mono text-[11px] text-[#F0EDE5]/40 hover:border-[#F0EDE5]/30 hover:bg-[#F0EDE5]/5 hover:text-[#F0EDE5]/60"
           >
             {copied ? "copied" : "copy"}
           </Button>
@@ -43,7 +43,7 @@ export default function FinalSolution({
             onClick={onNewDebate}
             variant="outline"
             size="sm"
-            className="h-7 border-neutral-800 font-mono text-[11px] text-neutral-500 hover:border-neutral-700 hover:text-neutral-300"
+            className="h-7 border-[#F0EDE5]/15 bg-transparent font-mono text-[11px] text-[#F0EDE5]/40 hover:border-[#F0EDE5]/30 hover:bg-[#F0EDE5]/5 hover:text-[#F0EDE5]/60"
           >
             new debate
           </Button>

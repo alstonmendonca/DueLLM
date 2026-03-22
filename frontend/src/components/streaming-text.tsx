@@ -16,26 +16,25 @@ function formatContent(raw: string): React.ReactNode[] {
       const lang = newlineIdx > -1 ? inner.slice(0, newlineIdx).trim() : "";
       const code = newlineIdx > -1 ? inner.slice(newlineIdx + 1) : inner;
       return (
-        <div key={i} className="group relative my-3">
+        <div key={i} className="my-3">
           {lang && (
-            <div className="flex items-center justify-between rounded-t border border-b-0 border-neutral-800 bg-neutral-900/50 px-3 py-1">
-              <span className="font-mono text-[10px] text-neutral-500">
+            <div className="rounded-t border border-b-0 border-[#F0EDE5]/8 px-3 py-1">
+              <span className="font-mono text-[10px] text-[#F0EDE5]/25">
                 {lang}
               </span>
             </div>
           )}
           <pre
-            className={`overflow-x-auto border border-neutral-800 bg-neutral-950 p-3 text-[13px] leading-relaxed ${
+            className={`overflow-x-auto border border-[#F0EDE5]/8 bg-[#312F2C] p-3 text-[13px] leading-relaxed ${
               lang ? "rounded-b" : "rounded"
             }`}
           >
-            <code className="font-mono text-neutral-300">{code}</code>
+            <code className="font-mono text-[#F0EDE5]/70">{code}</code>
           </pre>
         </div>
       );
     }
 
-    // Handle inline code
     const inlineParts = part.split(/(`[^`]+`)/g);
     return (
       <span key={i} className="whitespace-pre-wrap">
@@ -44,18 +43,17 @@ function formatContent(raw: string): React.ReactNode[] {
             return (
               <code
                 key={j}
-                className="rounded bg-neutral-900 px-1.5 py-0.5 font-mono text-[12px] text-neutral-300"
+                className="rounded bg-[#F0EDE5]/5 px-1.5 py-0.5 font-mono text-[12px] text-[#F0EDE5]/60"
               >
                 {p.slice(1, -1)}
               </code>
             );
           }
-          // Bold
           const boldParts = p.split(/(\*\*[^*]+\*\*)/g);
           return boldParts.map((bp, k) => {
             if (bp.startsWith("**") && bp.endsWith("**")) {
               return (
-                <strong key={`${j}-${k}`} className="font-semibold text-neutral-200">
+                <strong key={`${j}-${k}`} className="font-semibold text-[#F0EDE5]/80">
                   {bp.slice(2, -2)}
                 </strong>
               );
@@ -83,10 +81,10 @@ export default function StreamingText({
   if (!content && !isStreaming) return null;
 
   return (
-    <div className="px-4 py-3 text-[13px] leading-relaxed text-neutral-400">
+    <div className="px-4 py-3 text-[13px] leading-relaxed text-[#F0EDE5]/50">
       {formatContent(content)}
       {isStreaming && (
-        <span className="ml-0.5 inline-block h-3.5 w-[2px] animate-pulse bg-neutral-500" />
+        <span className="ml-0.5 inline-block h-3.5 w-[2px] animate-pulse bg-[#F0EDE5]/40" />
       )}
       <div ref={bottomRef} />
     </div>

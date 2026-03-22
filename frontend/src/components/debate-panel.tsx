@@ -30,8 +30,7 @@ export default function DebatePanel({
 }: DebatePanelProps) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden md:flex-row">
-      {/* Builder (left) */}
-      <div className="flex-1 overflow-hidden border-r border-neutral-800/30">
+      <div className="flex-1 overflow-hidden border-r border-[#F0EDE5]/8">
         <BuilderPanel
           rounds={builderRounds}
           isStreaming={builderStreaming}
@@ -39,11 +38,7 @@ export default function DebatePanel({
           currentRound={currentRound}
         />
       </div>
-
-      {/* Divider - visible on mobile */}
-      <div className="h-px bg-neutral-800/30 md:hidden" />
-
-      {/* Critic (right) */}
+      <div className="h-px bg-[#F0EDE5]/8 md:hidden" />
       <div className="flex-1 overflow-hidden">
         <CriticPanel
           rounds={criticRounds}
