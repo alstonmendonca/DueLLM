@@ -118,6 +118,12 @@
   --sidebar-ring: #F0EDE5;
 }
 
+/* Theme tokens — set via JS on <html> */
+:root {
+  --duo-bg: #312F2C;
+  --duo-fg: #F0EDE5;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

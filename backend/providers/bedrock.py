@@ -52,7 +52,7 @@ class BedrockProvider(LLMProvider):
                     ):
                         yield chunk
                 else:
-                    async for chunk in self._stream_converse(
+                    async for chunk in self._stream_non_claude(
                         messages, system_prompt, model_id, temperature
                     ):
                         yield chunk
@@ -104,54 +104,102 @@ class BedrockProvider(LLMProvider):
                 if text:
                     yield text
 
-    async def _stream_converse(
+    async def _stream_non_claude(
         self,
         messages: list[dict],
         system_prompt: str,
         model_id: str,
         temperature: float,
     ) -> AsyncGenerator[str, None]:
-        """Stream using the Bedrock Converse API (Llama, Mistral, etc.)."""
-        converse_messages = [
-            {
-                "role": msg["role"],
-                "content": [{"text": msg["content"]}],
+        """Non-streaming fallback for non-Claude models.
+
+        Uses invoke_model and yields the full response as one chunk.
+        """
+        # Build a chat-style prompt
+        prompt_parts = [f"System: {system_prompt}\n"]
+        for msg in messages:
+            role = "Human" if msg["role"] == "user" else "Assistant"
+            prompt_parts.append(f"{role}: {msg['content']}\n")
+        prompt_parts.append("Assistant:")
+        full_prompt = "\n".join(prompt_parts)
+
+        body_dict: dict = {"prompt": full_prompt, "temperature": temperature}
+
+        if "llama" in model_id.lower() or "meta" in model_id.lower():
+            body_dict["max_gen_len"] = 4096
+        elif "mistral" in model_id.lower() or "mixtral" in model_id.lower():
+            body_dict["max_tokens"] = 4096
+        elif "titan" in model_id.lower() or "amazon" in model_id.lower():
+            body_dict = {
+                "inputText": full_prompt,
+                "textGenerationConfig": {
+                    "maxTokenCount": 4096,
+                    "temperature": temperature,
+                },
             }
-            for msg in messages
-        ]
+        elif "cohere" in model_id.lower():
+            body_dict = {
+                "prompt": full_prompt,
+                "max_tokens": 4096,
+                "temperature": temperature,
+            }
+        else:
+            body_dict["max_tokens"] = 4096
 
         response = await asyncio.to_thread(
-            self._client.converse_stream,
+            self._client.invoke_model,
             modelId=model_id,
-            messages=converse_messages,
-            system=[{"text": system_prompt}],
-            inferenceConfig={
-                "maxTokens": 4096,
-                "temperature": temperature,
-            },
+            contentType="application/json",
+            accept="application/json",
+            body=json.dumps(body_dict),
         )
 
-        for event in response["stream"]:
-            if "contentBlockDelta" in event:
-                text = event["contentBlockDelta"].get("delta", {}).get("text", "")
-                if text:
-                    yield text
+        result = json.loads(response["body"].read())
+        text = (
+            result.get("generation", "")
+            or result.get("completion", "")
+            or result.get("results", [{}])[0].get("outputText", "")
+            or result.get("generations", [{}])[0].get("text", "")
+            or ""
+        )
+        if not text and isinstance(result, dict):
+            text = str(result)
+        if text:
+            yield text
 
     async def list_models(self) -> list[dict]:
-        """List available foundation models from Bedrock."""
+        """List available models — curated inference profiles + foundation models."""
+        # Curated inference profiles (Bedrock requires these for on-demand)
+        profiles = [
+            {"model_id": "us.anthropic.claude-sonnet-4-6", "model_name": "Claude Sonnet 4.6", "provider": "Anthropic"},
+            {"model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0", "model_name": "Claude Haiku 4.5", "provider": "Anthropic"},
+            {"model_id": "us.anthropic.claude-sonnet-4-5-20250929-v1:0", "model_name": "Claude Sonnet 4.5", "provider": "Anthropic"},
+            {"model_id": "us.anthropic.claude-opus-4-6-v1", "model_name": "Claude Opus 4.6", "provider": "Anthropic"},
+            {"model_id": "us.anthropic.claude-opus-4-5-20251101-v1:0", "model_name": "Claude Opus 4.5", "provider": "Anthropic"},
+            {"model_id": "us.anthropic.claude-opus-4-1-20250805-v1:0", "model_name": "Claude Opus 4.1", "provider": "Anthropic"},
+            {"model_id": "us.anthropic.claude-3-7-sonnet-20250219-v1:0", "model_name": "Claude 3.7 Sonnet", "provider": "Anthropic"},
+            {"model_id": "us.anthropic.claude-3-5-sonnet-20241022-v2:0", "model_name": "Claude 3.5 Sonnet v2", "provider": "Anthropic"},
+            {"model_id": "us.anthropic.claude-3-5-haiku-20241022-v1:0", "model_name": "Claude 3.5 Haiku", "provider": "Anthropic"},
+            {"model_id": "us.anthropic.claude-3-haiku-20240307-v1:0", "model_name": "Claude 3 Haiku", "provider": "Anthropic"},
+        ]
+
+        # Also try to fetch foundation models for non-Anthropic options
         try:
             response = await asyncio.to_thread(
                 self._bedrock_client.list_foundation_models,
                 byOutputModality="TEXT",
             )
-            return [
-                {
-                    "model_id": m["modelId"],
-                    "model_name": m.get("modelName", m["modelId"]),
+            for m in response.get("modelSummaries", []):
+                mid = m["modelId"]
+                # Skip Anthropic (already covered by profiles above)
+                if "anthropic" in mid:
+                    continue
+                profiles.append({
+                    "model_id": mid,
+                    "model_name": m.get("modelName", mid),
                     "provider": m.get("providerName", "Unknown"),
-                }
-                for m in response.get("modelSummaries", [])
-            ]
+                })
         except ClientError as exc:
-            logger.error("Failed to list Bedrock models: %s", exc)
-            return []
+            logger.warning("Could not fetch foundation models: %s", exc)
+
+        return profiles

@@ -7,16 +7,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import type { Settings } from "@/lib/types";
+import { getModels } from "@/lib/api";
+import type { Settings, BedrockModel } from "@/lib/types";
 
 const STORAGE_KEY = "duellm-settings";
 
 const DEFAULT_SETTINGS: Settings = {
-  builderModel: "anthropic.claude-3-5-sonnet-20241022-v2:0",
-  criticModel: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+  builderModel: "us.anthropic.claude-sonnet-4-6",
+  criticModel: "us.anthropic.claude-haiku-4-5-20251001-v1:0",
   maxRounds: 5,
   temperature: 0.7,
 };
@@ -47,9 +47,18 @@ export default function SettingsDialog({
   onSave,
 }: SettingsDialogProps) {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [models, setModels] = useState<BedrockModel[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
 
   useEffect(() => {
-    if (open) setSettings(loadSettings());
+    if (open) {
+      setSettings(loadSettings());
+      setLoadingModels(true);
+      getModels()
+        .then(setModels)
+        .catch(() => setModels([]))
+        .finally(() => setLoadingModels(false));
+    }
   }, [open]);
 
   const handleSave = () => {
@@ -57,6 +66,43 @@ export default function SettingsDialog({
     onSave(settings);
     onClose();
   };
+
+  const modelSelect = (
+    label: string,
+    value: string,
+    onChange: (v: string) => void
+  ) => (
+    <div className="space-y-2">
+      <Label className="font-mono text-[11px] text-[#F0EDE5]/40">
+        {label}
+      </Label>
+      {loadingModels ? (
+        <div className="rounded border border-[#F0EDE5]/10 px-3 py-2 font-mono text-xs text-[#F0EDE5]/30">
+          Loading models...
+        </div>
+      ) : models.length > 0 ? (
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full rounded border border-[#F0EDE5]/10 bg-[#312F2C] px-3 py-2 font-mono text-xs text-[#F0EDE5]/70 focus:outline-none focus:ring-1 focus:ring-[#F0EDE5]/20"
+        >
+          {models.map((m) => (
+            <option key={m.model_id} value={m.model_id}>
+              {m.model_name} ({m.provider})
+            </option>
+          ))}
+        </select>
+      ) : (
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="e.g. anthropic.claude-sonnet-4-6"
+          className="w-full rounded border border-[#F0EDE5]/10 bg-[#312F2C] px-3 py-2 font-mono text-xs text-[#F0EDE5]/70 placeholder:text-[#F0EDE5]/20 focus:outline-none focus:ring-1 focus:ring-[#F0EDE5]/20"
+        />
+      )}
+    </div>
+  );
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -67,30 +113,16 @@ export default function SettingsDialog({
           </DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-5 py-2">
-          <div className="space-y-2">
-            <Label className="font-mono text-[11px] text-[#F0EDE5]/40">
-              Builder Model
-            </Label>
-            <Input
-              value={settings.builderModel}
-              onChange={(e) =>
-                setSettings({ ...settings, builderModel: e.target.value })
-              }
-              className="border-[#F0EDE5]/10 bg-[#312F2C] font-mono text-sm text-[#F0EDE5]/70 focus-visible:ring-[#F0EDE5]/20"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label className="font-mono text-[11px] text-[#F0EDE5]/40">
-              Critic Model
-            </Label>
-            <Input
-              value={settings.criticModel}
-              onChange={(e) =>
-                setSettings({ ...settings, criticModel: e.target.value })
-              }
-              className="border-[#F0EDE5]/10 bg-[#312F2C] font-mono text-sm text-[#F0EDE5]/70 focus-visible:ring-[#F0EDE5]/20"
-            />
-          </div>
+          {modelSelect(
+            "Builder Model (LLM A)",
+            settings.builderModel,
+            (v) => setSettings({ ...settings, builderModel: v })
+          )}
+          {modelSelect(
+            "Critic Model (LLM B)",
+            settings.criticModel,
+            (v) => setSettings({ ...settings, criticModel: v })
+          )}
           <div className="space-y-2">
             <Label className="font-mono text-[11px] text-[#F0EDE5]/40">
               Max Rounds ({settings.maxRounds})

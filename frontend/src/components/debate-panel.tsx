@@ -17,6 +17,8 @@ interface DebatePanelProps {
   builderStreamContent: string;
   criticStreamContent: string;
   currentRound: number;
+  builderModel?: string;
+  criticModel?: string;
 }
 
 export default function DebatePanel({
@@ -27,24 +29,29 @@ export default function DebatePanel({
   builderStreamContent,
   criticStreamContent,
   currentRound,
+  builderModel,
+  criticModel,
 }: DebatePanelProps) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden md:flex-row">
-      <div className="flex-1 overflow-hidden border-r border-[#F0EDE5]/8">
+      <div className="flex-1 overflow-hidden"
+           style={{ borderRight: "1px solid color-mix(in srgb, var(--duo-fg) 8%, transparent)" }}>
         <BuilderPanel
           rounds={builderRounds}
           isStreaming={builderStreaming}
           currentStreamContent={builderStreamContent}
           currentRound={currentRound}
+          modelName={builderModel}
         />
       </div>
-      <div className="h-px bg-[#F0EDE5]/8 md:hidden" />
+      <div className="md:hidden" style={{ height: "1px", background: "color-mix(in srgb, var(--duo-fg) 8%, transparent)" }} />
       <div className="flex-1 overflow-hidden">
         <CriticPanel
           rounds={criticRounds}
           isStreaming={criticStreaming}
           currentStreamContent={criticStreamContent}
           currentRound={currentRound}
+          modelName={criticModel}
         />
       </div>
     </div>

@@ -9,10 +9,7 @@ interface FinalSolutionProps {
   onNewDebate: () => void;
 }
 
-export default function FinalSolution({
-  solution,
-  onNewDebate,
-}: FinalSolutionProps) {
+export default function FinalSolution({ solution, onNewDebate }: FinalSolutionProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -22,11 +19,13 @@ export default function FinalSolution({
   };
 
   return (
-    <div className="border-t border-[#F0EDE5]/15">
-      <div className="flex items-center justify-between border-b border-[#F0EDE5]/8 px-5 py-2.5">
+    <div style={{ borderTop: "1px solid color-mix(in srgb, var(--duo-fg) 18%, transparent)" }}>
+      <div className="flex items-center justify-between px-5 py-2.5"
+           style={{ borderBottom: "1px solid color-mix(in srgb, var(--duo-fg) 10%, transparent)" }}>
         <div className="flex items-center gap-3">
-          <div className="h-1.5 w-1.5 rounded-full bg-[#F0EDE5]" />
-          <span className="font-mono text-xs font-medium tracking-wide text-[#F0EDE5]/60">
+          <div className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--duo-fg)" }} />
+          <span className="font-mono text-xs font-medium tracking-wide"
+                style={{ color: "color-mix(in srgb, var(--duo-fg) 70%, transparent)" }}>
             Final Solution
           </span>
         </div>
@@ -35,7 +34,11 @@ export default function FinalSolution({
             onClick={handleCopy}
             variant="outline"
             size="sm"
-            className="h-7 border-[#F0EDE5]/15 bg-transparent font-mono text-[11px] text-[#F0EDE5]/40 hover:border-[#F0EDE5]/30 hover:bg-[#F0EDE5]/5 hover:text-[#F0EDE5]/60"
+            className="h-7 bg-transparent font-mono text-[11px] transition-opacity hover:opacity-80"
+            style={{
+              borderColor: "color-mix(in srgb, var(--duo-fg) 20%, transparent)",
+              color: "color-mix(in srgb, var(--duo-fg) 50%, transparent)",
+            }}
           >
             {copied ? "copied" : "copy"}
           </Button>
@@ -43,7 +46,11 @@ export default function FinalSolution({
             onClick={onNewDebate}
             variant="outline"
             size="sm"
-            className="h-7 border-[#F0EDE5]/15 bg-transparent font-mono text-[11px] text-[#F0EDE5]/40 hover:border-[#F0EDE5]/30 hover:bg-[#F0EDE5]/5 hover:text-[#F0EDE5]/60"
+            className="h-7 bg-transparent font-mono text-[11px] transition-opacity hover:opacity-80"
+            style={{
+              borderColor: "color-mix(in srgb, var(--duo-fg) 20%, transparent)",
+              color: "color-mix(in srgb, var(--duo-fg) 50%, transparent)",
+            }}
           >
             new debate
           </Button>

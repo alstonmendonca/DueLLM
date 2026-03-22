@@ -18,18 +18,22 @@ function formatContent(raw: string): React.ReactNode[] {
       return (
         <div key={i} className="my-3">
           {lang && (
-            <div className="rounded-t border border-b-0 border-[#F0EDE5]/8 px-3 py-1">
-              <span className="font-mono text-[10px] text-[#F0EDE5]/25">
+            <div className="rounded-t px-3 py-1"
+                 style={{ border: "1px solid color-mix(in srgb, var(--duo-fg) 10%, transparent)", borderBottom: "none" }}>
+              <span className="font-mono text-[10px]"
+                    style={{ color: "color-mix(in srgb, var(--duo-fg) 30%, transparent)" }}>
                 {lang}
               </span>
             </div>
           )}
-          <pre
-            className={`overflow-x-auto border border-[#F0EDE5]/8 bg-[#312F2C] p-3 text-[13px] leading-relaxed ${
-              lang ? "rounded-b" : "rounded"
-            }`}
-          >
-            <code className="font-mono text-[#F0EDE5]/70">{code}</code>
+          <pre className={`overflow-x-auto p-3 text-[13px] leading-relaxed ${lang ? "rounded-b" : "rounded"}`}
+               style={{
+                 border: "1px solid color-mix(in srgb, var(--duo-fg) 10%, transparent)",
+                 background: "color-mix(in srgb, var(--duo-fg) 3%, var(--duo-bg))",
+               }}>
+            <code className="font-mono" style={{ color: "color-mix(in srgb, var(--duo-fg) 85%, transparent)" }}>
+              {code}
+            </code>
           </pre>
         </div>
       );
@@ -41,10 +45,11 @@ function formatContent(raw: string): React.ReactNode[] {
         {inlineParts.map((p, j) => {
           if (p.startsWith("`") && p.endsWith("`")) {
             return (
-              <code
-                key={j}
-                className="rounded bg-[#F0EDE5]/5 px-1.5 py-0.5 font-mono text-[12px] text-[#F0EDE5]/60"
-              >
+              <code key={j} className="rounded px-1.5 py-0.5 font-mono text-[12px]"
+                    style={{
+                      background: "color-mix(in srgb, var(--duo-fg) 8%, transparent)",
+                      color: "color-mix(in srgb, var(--duo-fg) 80%, transparent)",
+                    }}>
                 {p.slice(1, -1)}
               </code>
             );
@@ -53,7 +58,8 @@ function formatContent(raw: string): React.ReactNode[] {
           return boldParts.map((bp, k) => {
             if (bp.startsWith("**") && bp.endsWith("**")) {
               return (
-                <strong key={`${j}-${k}`} className="font-semibold text-[#F0EDE5]/80">
+                <strong key={`${j}-${k}`} className="font-semibold"
+                        style={{ color: "color-mix(in srgb, var(--duo-fg) 95%, transparent)" }}>
                   {bp.slice(2, -2)}
                 </strong>
               );
@@ -66,25 +72,22 @@ function formatContent(raw: string): React.ReactNode[] {
   });
 }
 
-export default function StreamingText({
-  content,
-  isStreaming,
-}: StreamingTextProps) {
+export default function StreamingText({ content, isStreaming }: StreamingTextProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (isStreaming) {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
+    if (isStreaming) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [content, isStreaming]);
 
   if (!content && !isStreaming) return null;
 
   return (
-    <div className="px-4 py-3 text-[13px] leading-relaxed text-[#F0EDE5]/50">
+    <div className="px-4 py-3 text-[13px] leading-relaxed"
+         style={{ color: "color-mix(in srgb, var(--duo-fg) 75%, transparent)" }}>
       {formatContent(content)}
       {isStreaming && (
-        <span className="ml-0.5 inline-block h-3.5 w-[2px] animate-pulse bg-[#F0EDE5]/40" />
+        <span className="ml-0.5 inline-block h-3.5 w-[2px] animate-pulse"
+              style={{ background: "color-mix(in srgb, var(--duo-fg) 50%, transparent)" }} />
       )}
       <div ref={bottomRef} />
     </div>

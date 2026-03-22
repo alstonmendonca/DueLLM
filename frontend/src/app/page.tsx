@@ -4,6 +4,7 @@ import { useState, useCallback, useRef } from "react";
 import PromptInput from "@/components/prompt-input";
 import DebatePanel from "@/components/debate-panel";
 import FinalSolution from "@/components/final-solution";
+import ThemeSwitcher from "@/components/theme-switcher";
 import SettingsDialog, { loadSettings } from "@/components/settings-dialog";
 import { startDebate, streamDebate, stopDebate } from "@/lib/api";
 import type { DebateEvent, DebateStatus, Settings } from "@/lib/types";
@@ -27,7 +28,6 @@ export default function Home() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [error, setError] = useState<string | null>(null);
-
   const debateIdRef = useRef<string | null>(null);
   const closeStreamRef = useRef<(() => void) | null>(null);
   const builderStreamRef = useRef("");
@@ -147,27 +147,31 @@ export default function Home() {
   const isIdle = status === "idle";
 
   return (
-    <div className="flex h-screen flex-col bg-[#312F2C]">
+    <div className="flex h-screen flex-col"
+         style={{ background: "var(--duo-bg)", color: "var(--duo-fg)" }}>
       {/* Header */}
-      <header className="flex items-center justify-between border-b border-[#F0EDE5]/10 px-5 py-3">
+      <header className="flex items-center justify-between px-5 py-3"
+              style={{ borderBottom: "1px solid color-mix(in srgb, var(--duo-fg) 12%, transparent)" }}>
         <div className="flex items-center gap-4">
-          <h1 className="font-mono text-base font-bold tracking-widest text-[#F0EDE5]">
-            Due<span className="text-[#F0EDE5]/40">LLM</span>
+          <h1 className="font-mono text-base font-bold tracking-widest"
+              style={{ color: "var(--duo-fg)" }}>
+            Due<span style={{ color: "color-mix(in srgb, var(--duo-fg) 40%, transparent)" }}>LLM</span>
           </h1>
 
           {status === "running" && (
             <div className="flex items-center gap-2">
-              <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#F0EDE5]" />
-              <span className="font-mono text-[11px] text-[#F0EDE5]/60">
+              <div className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: "var(--duo-fg)" }} />
+              <span className="font-mono text-[11px]" style={{ color: "color-mix(in srgb, var(--duo-fg) 70%, transparent)" }}>
                 Round {currentRound}/{maxRounds}
               </span>
               <div className="flex gap-1">
                 {Array.from({ length: maxRounds }, (_, i) => (
                   <div
                     key={i}
-                    className={`h-1 w-3 rounded-full transition-colors ${
-                      i < currentRound ? "bg-[#F0EDE5]" : "bg-[#F0EDE5]/10"
-                    }`}
+                    className="h-1 w-3 rounded-full transition-colors"
+                    style={{ background: i < currentRound
+                      ? "var(--duo-fg)"
+                      : "color-mix(in srgb, var(--duo-fg) 12%, transparent)" }}
                   />
                 ))}
               </div>
@@ -176,29 +180,33 @@ export default function Home() {
 
           {status === "converged" && (
             <div className="flex items-center gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-[#F0EDE5]" />
-              <span className="font-mono text-[11px] text-[#F0EDE5]/60">
+              <div className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--duo-fg)" }} />
+              <span className="font-mono text-[11px]" style={{ color: "color-mix(in srgb, var(--duo-fg) 70%, transparent)" }}>
                 Converged in {currentRound} round{currentRound !== 1 ? "s" : ""}
               </span>
             </div>
           )}
 
           {status === "stopped" && finalSolution && (
-            <span className="font-mono text-[11px] text-[#F0EDE5]/40">
+            <span className="font-mono text-[11px]" style={{ color: "color-mix(in srgb, var(--duo-fg) 50%, transparent)" }}>
               Stopped at round {currentRound}
             </span>
           )}
 
           {status === "error" && (
-            <span className="font-mono text-[11px] text-[#F0EDE5]/40">
+            <span className="font-mono text-[11px]" style={{ color: "color-mix(in srgb, var(--duo-fg) 50%, transparent)" }}>
               Error
             </span>
           )}
         </div>
 
-        <span className="hidden font-mono text-[10px] tracking-wide text-[#F0EDE5]/20 sm:block">
-          adversarial code refinement
-        </span>
+        <div className="flex items-center gap-4">
+          <span className="hidden font-mono text-[10px] tracking-wide sm:block"
+                style={{ color: "color-mix(in srgb, var(--duo-fg) 25%, transparent)" }}>
+            adversarial code refinement
+          </span>
+          <ThemeSwitcher />
+        </div>
       </header>
 
       {/* Prompt */}
@@ -211,8 +219,11 @@ export default function Home() {
 
       {/* Error */}
       {error && (
-        <div className="border-b border-[#F0EDE5]/10 px-5 py-2">
-          <span className="font-mono text-xs text-[#F0EDE5]/50">{error}</span>
+        <div className="px-5 py-2"
+             style={{ borderBottom: "1px solid color-mix(in srgb, var(--duo-fg) 12%, transparent)" }}>
+          <span className="font-mono text-xs" style={{ color: "color-mix(in srgb, var(--duo-fg) 60%, transparent)" }}>
+            {error}
+          </span>
         </div>
       )}
 
@@ -220,20 +231,23 @@ export default function Home() {
       {isIdle && builderRounds.length === 0 && (
         <div className="flex flex-1 flex-col items-center justify-center gap-8 px-4">
           <div className="flex flex-col items-center gap-4">
-            <div className="flex items-center gap-4 text-[#F0EDE5]/20">
-              <div className="flex h-10 w-10 items-center justify-center rounded border border-[#F0EDE5]/10">
-                <span className="font-mono text-xs text-[#F0EDE5]/30">A</span>
+            <div className="flex items-center gap-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded"
+                   style={{ border: "1px solid color-mix(in srgb, var(--duo-fg) 15%, transparent)" }}>
+                <span className="font-mono text-xs" style={{ color: "color-mix(in srgb, var(--duo-fg) 35%, transparent)" }}>A</span>
               </div>
               <div className="flex flex-col items-center gap-1">
-                <div className="h-px w-8 bg-[#F0EDE5]/10" />
-                <span className="font-mono text-[9px] text-[#F0EDE5]/20">vs</span>
-                <div className="h-px w-8 bg-[#F0EDE5]/10" />
+                <div className="h-px w-8" style={{ background: "color-mix(in srgb, var(--duo-fg) 15%, transparent)" }} />
+                <span className="font-mono text-[9px]" style={{ color: "color-mix(in srgb, var(--duo-fg) 25%, transparent)" }}>vs</span>
+                <div className="h-px w-8" style={{ background: "color-mix(in srgb, var(--duo-fg) 15%, transparent)" }} />
               </div>
-              <div className="flex h-10 w-10 items-center justify-center rounded border border-[#F0EDE5]/10">
-                <span className="font-mono text-xs text-[#F0EDE5]/30">B</span>
+              <div className="flex h-10 w-10 items-center justify-center rounded"
+                   style={{ border: "1px solid color-mix(in srgb, var(--duo-fg) 15%, transparent)" }}>
+                <span className="font-mono text-xs" style={{ color: "color-mix(in srgb, var(--duo-fg) 35%, transparent)" }}>B</span>
               </div>
             </div>
-            <p className="max-w-sm text-center text-sm leading-relaxed text-[#F0EDE5]/30">
+            <p className="max-w-sm text-center text-sm leading-relaxed"
+               style={{ color: "color-mix(in srgb, var(--duo-fg) 40%, transparent)" }}>
               Describe a coding or architecture problem. Two LLMs will debate
               to produce a battle-tested solution.
             </p>
@@ -247,7 +261,11 @@ export default function Home() {
               <button
                 key={example}
                 onClick={() => handleSubmit(example)}
-                className="rounded border border-[#F0EDE5]/10 px-3 py-1.5 font-mono text-[11px] text-[#F0EDE5]/30 transition-colors hover:border-[#F0EDE5]/25 hover:text-[#F0EDE5]/60"
+                className="rounded px-3 py-1.5 font-mono text-[11px] transition-opacity hover:opacity-80"
+                style={{
+                  border: "1px solid color-mix(in srgb, var(--duo-fg) 15%, transparent)",
+                  color: "color-mix(in srgb, var(--duo-fg) 40%, transparent)",
+                }}
               >
                 {example}
               </button>
@@ -266,6 +284,8 @@ export default function Home() {
           builderStreamContent={builderStreamContent}
           criticStreamContent={criticStreamContent}
           currentRound={currentRound}
+          builderModel={settings.builderModel}
+          criticModel={settings.criticModel}
         />
       )}
 

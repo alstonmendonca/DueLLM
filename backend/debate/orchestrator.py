@@ -93,6 +93,7 @@ async def run_debate(
         ]
 
         builder_response = ""
+        cancelled = False
         try:
             async for chunk in provider.generate_stream(
                 messages=current_builder_messages,
@@ -100,6 +101,9 @@ async def run_debate(
                 model_id=builder_model,
                 temperature=request.temperature,
             ):
+                if cancel_check():
+                    cancelled = True
+                    break
                 builder_response += chunk
                 yield DebateEvent(
                     type="builder_chunk", round=round_num, content=chunk
@@ -109,6 +113,10 @@ async def run_debate(
             yield DebateEvent(
                 type="error", round=round_num, content=str(exc)
             )
+            return
+
+        if cancelled:
+            yield DebateEvent(type="stopped", round=round_num)
             return
 
         builder_messages = [
@@ -134,6 +142,7 @@ async def run_debate(
         ]
 
         critic_response = ""
+        cancelled = False
         try:
             async for chunk in provider.generate_stream(
                 messages=current_critic_messages,
@@ -141,6 +150,9 @@ async def run_debate(
                 model_id=critic_model,
                 temperature=request.temperature,
             ):
+                if cancel_check():
+                    cancelled = True
+                    break
                 critic_response += chunk
                 yield DebateEvent(
                     type="critic_chunk", round=round_num, content=chunk
@@ -150,6 +162,10 @@ async def run_debate(
             yield DebateEvent(
                 type="error", round=round_num, content=str(exc)
             )
+            return
+
+        if cancelled:
+            yield DebateEvent(type="stopped", round=round_num)
             return
 
         converged = check_convergence(critic_response)

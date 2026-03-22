@@ -2,6 +2,13 @@ import { DebateEvent, DebateRequest, BedrockModel } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+const TERMINAL_EVENTS = new Set([
+  "converged",
+  "max_rounds_reached",
+  "stopped",
+  "error",
+]);
+
 export async function startDebate(
   request: DebateRequest
 ): Promise<{ debate_id: string }> {
@@ -26,6 +33,8 @@ export function streamDebate(
     `${API_BASE}/api/debate/${debateId}/stream`
   );
 
+  let finished = false;
+
   const eventTypes = [
     "builder_start",
     "builder_chunk",
@@ -44,6 +53,13 @@ export function streamDebate(
       try {
         const data = JSON.parse(e.data) as DebateEvent;
         onEvent(data);
+
+        // Close the stream on terminal events so EventSource
+        // doesn't treat the server-side close as an error
+        if (TERMINAL_EVENTS.has(data.type)) {
+          finished = true;
+          source.close();
+        }
       } catch {
         onError(`Failed to parse event: ${e.data}`);
       }
@@ -51,11 +67,17 @@ export function streamDebate(
   }
 
   source.onerror = () => {
-    onError("Connection lost");
+    // If we already got a terminal event, this is expected — ignore
+    if (finished) return;
+
     source.close();
+    onError("Connection lost — check that the backend is running");
   };
 
-  return () => source.close();
+  return () => {
+    finished = true;
+    source.close();
+  };
 }
 
 export async function stopDebate(debateId: string): Promise<void> {
