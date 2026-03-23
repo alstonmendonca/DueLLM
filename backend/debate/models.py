@@ -22,6 +22,11 @@ class DebateRequest(BaseModel):
     critic_model: Optional[str] = None
     max_rounds: int = Field(default=5, ge=1, le=10)
     temperature: float = Field(default=0.7, ge=0.0, le=1.0)
+    max_tokens: int = Field(default=4096, ge=512, le=16384)
+    top_p: float = Field(default=1.0, ge=0.0, le=1.0)
+    builder_system_prompt: Optional[str] = None
+    critic_system_prompt: Optional[str] = None
+    convergence_keyword: str = Field(default="CONVERGED")
 
 
 class DebateEvent(BaseModel):

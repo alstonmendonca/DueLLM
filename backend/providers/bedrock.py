@@ -42,18 +42,20 @@ class BedrockProvider(LLMProvider):
         system_prompt: str,
         model_id: str,
         temperature: float = 0.7,
+        max_tokens: int = 4096,
+        top_p: float = 1.0,
     ) -> AsyncGenerator[str, None]:
         """Stream text chunks from a Bedrock model."""
         for attempt in range(MAX_RETRIES):
             try:
                 if _is_claude_model(model_id):
                     async for chunk in self._stream_claude(
-                        messages, system_prompt, model_id, temperature
+                        messages, system_prompt, model_id, temperature, max_tokens, top_p
                     ):
                         yield chunk
                 else:
                     async for chunk in self._stream_non_claude(
-                        messages, system_prompt, model_id, temperature
+                        messages, system_prompt, model_id, temperature, max_tokens
                     ):
                         yield chunk
                 return
@@ -76,15 +78,22 @@ class BedrockProvider(LLMProvider):
         system_prompt: str,
         model_id: str,
         temperature: float,
+        max_tokens: int = 4096,
+        top_p: float = 1.0,
     ) -> AsyncGenerator[str, None]:
         """Stream using the Claude Messages API format."""
-        body = json.dumps({
+        params: dict = {
             "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 4096,
-            "temperature": temperature,
+            "max_tokens": max_tokens,
             "system": system_prompt,
             "messages": messages,
-        })
+        }
+        # Claude API doesn't allow both temperature and top_p simultaneously
+        if top_p < 1.0:
+            params["top_p"] = top_p
+        else:
+            params["temperature"] = temperature
+        body = json.dumps(params)
 
         response = await asyncio.to_thread(
             self._client.invoke_model_with_response_stream,
@@ -110,6 +119,7 @@ class BedrockProvider(LLMProvider):
         system_prompt: str,
         model_id: str,
         temperature: float,
+        max_tokens: int = 4096,
     ) -> AsyncGenerator[str, None]:
         """Non-streaming fallback for non-Claude models.
 
@@ -126,25 +136,25 @@ class BedrockProvider(LLMProvider):
         body_dict: dict = {"prompt": full_prompt, "temperature": temperature}
 
         if "llama" in model_id.lower() or "meta" in model_id.lower():
-            body_dict["max_gen_len"] = 4096
+            body_dict["max_gen_len"] = max_tokens
         elif "mistral" in model_id.lower() or "mixtral" in model_id.lower():
-            body_dict["max_tokens"] = 4096
+            body_dict["max_tokens"] = max_tokens
         elif "titan" in model_id.lower() or "amazon" in model_id.lower():
             body_dict = {
                 "inputText": full_prompt,
                 "textGenerationConfig": {
-                    "maxTokenCount": 4096,
+                    "maxTokenCount": max_tokens,
                     "temperature": temperature,
                 },
             }
         elif "cohere" in model_id.lower():
             body_dict = {
                 "prompt": full_prompt,
-                "max_tokens": 4096,
+                "max_tokens": max_tokens,
                 "temperature": temperature,
             }
         else:
-            body_dict["max_tokens"] = 4096
+            body_dict["max_tokens"] = max_tokens
 
         response = await asyncio.to_thread(
             self._client.invoke_model,

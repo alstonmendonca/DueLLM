@@ -1,4 +1,4 @@
-import { DebateEvent, DebateRequest, BedrockModel } from "./types";
+import { DebateEvent, DebateRequest, BedrockModel, Defaults } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -89,4 +89,14 @@ export async function getModels(): Promise<BedrockModel[]> {
   if (!res.ok) return [];
   const data = await res.json();
   return data.models || [];
+}
+
+export async function getDefaults(): Promise<Defaults | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/defaults`);
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
 }

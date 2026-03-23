@@ -16,8 +16,13 @@ from backend.debate.models import (
     DebateState,
     DebateStatus,
 )
-from backend.debate.orchestrator import run_debate
+from backend.debate.orchestrator import (
+    DEFAULT_BUILDER_SYSTEM_PROMPT,
+    DEFAULT_CRITIC_SYSTEM_PROMPT_TEMPLATE,
+    run_debate,
+)
 from backend.providers.bedrock import BedrockProvider
+from backend.providers.ollama import OllamaProvider
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -47,14 +52,43 @@ async def health_check() -> dict:
 
 @app.get("/api/models")
 async def list_models() -> dict:
-    """List available Bedrock models."""
+    """List available models from all providers."""
+    all_models: list[dict] = []
+
+    # Ollama (local) — listed first so they appear at the top
     try:
-        provider = BedrockProvider()
-        models = await provider.list_models()
-        return {"models": models}
+        ollama = OllamaProvider()
+        all_models.extend(await ollama.list_models())
     except Exception as exc:
-        logger.error("Failed to list models: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.warning("Ollama not available: %s", exc)
+
+    # Bedrock (cloud)
+    try:
+        bedrock = BedrockProvider()
+        all_models.extend(await bedrock.list_models())
+    except Exception as exc:
+        logger.error("Failed to list Bedrock models: %s", exc)
+
+    if not all_models:
+        raise HTTPException(status_code=500, detail="No models available")
+
+    return {"models": all_models}
+
+
+@app.get("/api/defaults")
+async def get_defaults() -> dict:
+    """Return default system prompts and settings."""
+    return {
+        "builder_system_prompt": DEFAULT_BUILDER_SYSTEM_PROMPT,
+        "critic_system_prompt": DEFAULT_CRITIC_SYSTEM_PROMPT_TEMPLATE.format(
+            keyword="CONVERGED"
+        ),
+        "convergence_keyword": "CONVERGED",
+        "max_tokens": 4096,
+        "top_p": 1.0,
+        "temperature": 0.7,
+        "max_rounds": 5,
+    }
 
 
 @app.post("/api/debate/start")

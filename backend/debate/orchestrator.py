@@ -6,11 +6,11 @@ from typing import AsyncGenerator
 from backend.config import get_settings
 from backend.debate.convergence import check_convergence
 from backend.debate.models import DebateEvent, DebateRequest
-from backend.providers.registry import get_provider
+from backend.providers.registry import provider_for_model, strip_provider_prefix
 
 logger = logging.getLogger(__name__)
 
-BUILDER_SYSTEM_PROMPT = (
+DEFAULT_BUILDER_SYSTEM_PROMPT = (
     "You are an expert software engineer participating in DueLLM — an "
     "adversarial debate system where two LLMs collaborate to produce the "
     "best possible solution. You are the BUILDER.\n\n"
@@ -27,7 +27,7 @@ BUILDER_SYSTEM_PROMPT = (
     "justify your reasoning, but do not be defensive — improve the code."
 )
 
-CRITIC_SYSTEM_PROMPT = (
+DEFAULT_CRITIC_SYSTEM_PROMPT_TEMPLATE = (
     "You are a senior code reviewer and software architect participating in "
     "DueLLM — an adversarial debate system where two LLMs collaborate to "
     "produce the best possible solution. You are the CRITIC.\n\n"
@@ -46,10 +46,17 @@ CRITIC_SYSTEM_PROMPT = (
     "has subtle concurrency bugs, or uses outdated patterns. Look harder "
     "than you would for human code.\n\n"
     "When the solution has no major issues remaining, you MUST respond with "
-    "exactly: \"CONVERGED: No major issues remaining.\" followed by any "
-    "minor suggestions. Do not say CONVERGED unless you genuinely believe "
+    "exactly: \"{keyword}: No major issues remaining.\" followed by any "
+    "minor suggestions. Do not say {keyword} unless you genuinely believe "
     "the solution is production-ready."
 )
+
+
+def _build_critic_system_prompt(convergence_keyword: str, custom_prompt: str | None) -> str:
+    """Build the critic system prompt, injecting the convergence keyword."""
+    if custom_prompt:
+        return custom_prompt
+    return DEFAULT_CRITIC_SYSTEM_PROMPT_TEMPLATE.format(keyword=convergence_keyword)
 
 
 async def run_debate(
@@ -66,11 +73,17 @@ async def run_debate(
         DebateEvent objects for each stage of the debate.
     """
     settings = get_settings()
-    provider = get_provider("bedrock")
 
-    builder_model = request.builder_model or settings.default_builder_model
-    critic_model = request.critic_model or settings.default_critic_model
+    builder_model_raw = request.builder_model or settings.default_builder_model
+    critic_model_raw = request.critic_model or settings.default_critic_model
+    builder_provider = provider_for_model(builder_model_raw)
+    critic_provider = provider_for_model(critic_model_raw)
+    builder_model = strip_provider_prefix(builder_model_raw)
+    critic_model = strip_provider_prefix(critic_model_raw)
     max_rounds = request.max_rounds
+    convergence_keyword = request.convergence_keyword
+    builder_system_prompt = request.builder_system_prompt or DEFAULT_BUILDER_SYSTEM_PROMPT
+    critic_system_prompt = _build_critic_system_prompt(convergence_keyword, request.critic_system_prompt)
 
     builder_messages: list[dict] = []
     critic_messages: list[dict] = []
@@ -95,11 +108,13 @@ async def run_debate(
         builder_response = ""
         cancelled = False
         try:
-            async for chunk in provider.generate_stream(
+            async for chunk in builder_provider.generate_stream(
                 messages=current_builder_messages,
-                system_prompt=BUILDER_SYSTEM_PROMPT,
+                system_prompt=builder_system_prompt,
                 model_id=builder_model,
                 temperature=request.temperature,
+                max_tokens=request.max_tokens,
+                top_p=request.top_p,
             ):
                 if cancel_check():
                     cancelled = True
@@ -144,11 +159,13 @@ async def run_debate(
         critic_response = ""
         cancelled = False
         try:
-            async for chunk in provider.generate_stream(
+            async for chunk in critic_provider.generate_stream(
                 messages=current_critic_messages,
-                system_prompt=CRITIC_SYSTEM_PROMPT,
+                system_prompt=critic_system_prompt,
                 model_id=critic_model,
                 temperature=request.temperature,
+                max_tokens=request.max_tokens,
+                top_p=request.top_p,
             ):
                 if cancel_check():
                     cancelled = True
@@ -168,7 +185,7 @@ async def run_debate(
             yield DebateEvent(type="stopped", round=round_num)
             return
 
-        converged = check_convergence(critic_response)
+        converged = check_convergence(critic_response, convergence_keyword)
         critic_messages = [
             *current_critic_messages,
             {"role": "assistant", "content": critic_response},

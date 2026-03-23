@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 interface StreamingTextProps {
   content: string;
   isStreaming: boolean;
+  autoScroll?: boolean;
 }
 
 function formatContent(raw: string): React.ReactNode[] {
@@ -18,20 +19,16 @@ function formatContent(raw: string): React.ReactNode[] {
       return (
         <div key={i} className="my-3">
           {lang && (
-            <div className="rounded-t px-3 py-1"
-                 style={{ border: "1px solid color-mix(in srgb, var(--duo-fg) 10%, transparent)", borderBottom: "none" }}>
-              <span className="font-mono text-[10px]"
-                    style={{ color: "color-mix(in srgb, var(--duo-fg) 30%, transparent)" }}>
+            <div className="rounded-t border border-b-0 px-3 py-1"
+                 style={{ borderColor: "rgba(128,128,128,0.15)" }}>
+              <span className="font-mono text-[10px]" style={{ color: "var(--duo-fg)", opacity: 0.4 }}>
                 {lang}
               </span>
             </div>
           )}
-          <pre className={`overflow-x-auto p-3 text-[13px] leading-relaxed ${lang ? "rounded-b" : "rounded"}`}
-               style={{
-                 border: "1px solid color-mix(in srgb, var(--duo-fg) 10%, transparent)",
-                 background: "color-mix(in srgb, var(--duo-fg) 3%, var(--duo-bg))",
-               }}>
-            <code className="font-mono" style={{ color: "color-mix(in srgb, var(--duo-fg) 85%, transparent)" }}>
+          <pre className={`overflow-x-auto p-3 leading-relaxed ${lang ? "rounded-b" : "rounded"}`}
+               style={{ border: "1px solid rgba(128,128,128,0.15)", backgroundColor: "rgba(128,128,128,0.05)", fontSize: "inherit" }}>
+            <code className="font-mono" style={{ color: "var(--duo-fg)", opacity: 0.85 }}>
               {code}
             </code>
           </pre>
@@ -45,11 +42,8 @@ function formatContent(raw: string): React.ReactNode[] {
         {inlineParts.map((p, j) => {
           if (p.startsWith("`") && p.endsWith("`")) {
             return (
-              <code key={j} className="rounded px-1.5 py-0.5 font-mono text-[12px]"
-                    style={{
-                      background: "color-mix(in srgb, var(--duo-fg) 8%, transparent)",
-                      color: "color-mix(in srgb, var(--duo-fg) 80%, transparent)",
-                    }}>
+              <code key={j} className="rounded px-1.5 py-0.5 font-mono"
+                    style={{ color: "var(--duo-fg)", opacity: 0.8, backgroundColor: "rgba(128,128,128,0.1)", fontSize: "0.9em" }}>
                 {p.slice(1, -1)}
               </code>
             );
@@ -58,8 +52,7 @@ function formatContent(raw: string): React.ReactNode[] {
           return boldParts.map((bp, k) => {
             if (bp.startsWith("**") && bp.endsWith("**")) {
               return (
-                <strong key={`${j}-${k}`} className="font-semibold"
-                        style={{ color: "color-mix(in srgb, var(--duo-fg) 95%, transparent)" }}>
+                <strong key={`${j}-${k}`} className="font-semibold" style={{ color: "var(--duo-fg)", opacity: 0.95 }}>
                   {bp.slice(2, -2)}
                 </strong>
               );
@@ -72,22 +65,20 @@ function formatContent(raw: string): React.ReactNode[] {
   });
 }
 
-export default function StreamingText({ content, isStreaming }: StreamingTextProps) {
+export default function StreamingText({ content, isStreaming, autoScroll = true }: StreamingTextProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (isStreaming) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [content, isStreaming]);
+    if (isStreaming && autoScroll) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [content, isStreaming, autoScroll]);
 
   if (!content && !isStreaming) return null;
 
   return (
-    <div className="px-4 py-3 text-[13px] leading-relaxed"
-         style={{ color: "color-mix(in srgb, var(--duo-fg) 75%, transparent)" }}>
+    <div className="px-4 py-3 leading-relaxed" style={{ color: "var(--duo-fg)", opacity: 0.75, fontSize: "inherit" }}>
       {formatContent(content)}
       {isStreaming && (
-        <span className="ml-0.5 inline-block h-3.5 w-[2px] animate-pulse"
-              style={{ background: "color-mix(in srgb, var(--duo-fg) 50%, transparent)" }} />
+        <span className="ml-0.5 inline-block h-3.5 w-[2px] animate-pulse" style={{ backgroundColor: "var(--duo-fg)" }} />
       )}
       <div ref={bottomRef} />
     </div>

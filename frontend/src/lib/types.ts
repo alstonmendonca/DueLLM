@@ -4,6 +4,11 @@ export interface DebateRequest {
   critic_model?: string;
   max_rounds: number;
   temperature: number;
+  max_tokens: number;
+  top_p: number;
+  builder_system_prompt?: string;
+  critic_system_prompt?: string;
+  convergence_keyword: string;
 }
 
 export interface DebateEvent {
@@ -44,8 +49,39 @@ export interface BedrockModel {
 }
 
 export interface Settings {
+  // Models tab
   builderModel: string;
   criticModel: string;
-  maxRounds: number;
   temperature: number;
+  maxTokens: number;
+  topP: number;
+  // Prompts tab
+  builderSystemPrompt: string;
+  criticSystemPrompt: string;
+  convergenceKeyword: string;
+  // Debate tab
+  maxRounds: number;
+  autoScroll: boolean;
+  exportFormat: "markdown" | "json" | "both";
+  // Appearance tab
+  fontSize: number;
+  layoutDirection: "horizontal" | "vertical";
+  customBg: string;
+  customFg: string;
+  useCustomTheme: boolean;
+}
+
+export interface DebatePreset {
+  name: string;
+  settings: Settings;
+}
+
+export interface Defaults {
+  builder_system_prompt: string;
+  critic_system_prompt: string;
+  convergence_keyword: string;
+  max_tokens: number;
+  top_p: number;
+  temperature: number;
+  max_rounds: number;
 }

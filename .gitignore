@@ -32,3 +32,4 @@ logs/
 coverage/
 .pytest_cache/
 htmlcov/
+.gstack/

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import PromptInput from "@/components/prompt-input";
 import DebatePanel from "@/components/debate-panel";
 import FinalSolution from "@/components/final-solution";
@@ -33,6 +33,15 @@ export default function Home() {
   const builderStreamRef = useRef("");
   const criticStreamRef = useRef("");
 
+  // Apply appearance settings
+  useEffect(() => {
+    document.documentElement.style.setProperty("--duo-font-size", `${settings.fontSize}px`);
+    if (settings.useCustomTheme) {
+      document.documentElement.style.setProperty("--duo-bg", settings.customBg);
+      document.documentElement.style.setProperty("--duo-fg", settings.customFg);
+    }
+  }, [settings.fontSize, settings.useCustomTheme, settings.customBg, settings.customFg]);
+
   const resetState = useCallback(() => {
     setBuilderRounds([]);
     setCriticRounds([]);
@@ -60,15 +69,17 @@ export default function Home() {
         builderStreamRef.current += event.content || "";
         setBuilderStreamContent(builderStreamRef.current);
         break;
-      case "builder_end":
+      case "builder_end": {
+        const builderContent = builderStreamRef.current;
         setBuilderStreaming(false);
         setBuilderRounds((prev) => [
           ...prev,
-          { round: event.round || 0, content: builderStreamRef.current, converged: false },
+          { round: event.round || 0, content: builderContent, converged: false },
         ]);
         builderStreamRef.current = "";
         setBuilderStreamContent("");
         break;
+      }
       case "critic_start":
         criticStreamRef.current = "";
         setCriticStreamContent("");
@@ -78,15 +89,17 @@ export default function Home() {
         criticStreamRef.current += event.content || "";
         setCriticStreamContent(criticStreamRef.current);
         break;
-      case "critic_end":
+      case "critic_end": {
+        const criticContent = criticStreamRef.current;
         setCriticStreaming(false);
         setCriticRounds((prev) => [
           ...prev,
-          { round: event.round || 0, content: criticStreamRef.current, converged: event.converged || false },
+          { round: event.round || 0, content: criticContent, converged: event.converged || false },
         ]);
         criticStreamRef.current = "";
         setCriticStreamContent("");
         break;
+      }
       case "converged":
         setStatus("converged");
         setFinalSolution(event.final_solution || "");
@@ -116,6 +129,11 @@ export default function Home() {
           critic_model: settings.criticModel,
           max_rounds: settings.maxRounds,
           temperature: settings.temperature,
+          max_tokens: settings.maxTokens,
+          top_p: settings.topP,
+          builder_system_prompt: settings.builderSystemPrompt || undefined,
+          critic_system_prompt: settings.criticSystemPrompt || undefined,
+          convergence_keyword: settings.convergenceKeyword,
         });
         debateIdRef.current = debate_id;
         const close = streamDebate(debate_id, handleEvent, (err) => {
@@ -147,21 +165,27 @@ export default function Home() {
   const isIdle = status === "idle";
 
   return (
-    <div className="flex h-screen flex-col"
-         style={{ background: "var(--duo-bg)", color: "var(--duo-fg)" }}>
+    <div
+      className="flex h-screen flex-col"
+      style={{
+        background: "var(--duo-bg)",
+        color: "var(--duo-fg)",
+        fontSize: `${settings.fontSize}px`,
+      }}
+    >
       {/* Header */}
       <header className="flex items-center justify-between px-5 py-3"
-              style={{ borderBottom: "1px solid color-mix(in srgb, var(--duo-fg) 12%, transparent)" }}>
+              style={{ borderBottom: "1px solid rgba(128,128,128,0.15)" }}>
         <div className="flex items-center gap-4">
           <h1 className="font-mono text-base font-bold tracking-widest"
               style={{ color: "var(--duo-fg)" }}>
-            Due<span style={{ color: "color-mix(in srgb, var(--duo-fg) 40%, transparent)" }}>LLM</span>
+            Due<span style={{ color: "var(--duo-fg)", opacity: 0.4 }}>LLM</span>
           </h1>
 
           {status === "running" && (
             <div className="flex items-center gap-2">
               <div className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: "var(--duo-fg)" }} />
-              <span className="font-mono text-[11px]" style={{ color: "color-mix(in srgb, var(--duo-fg) 70%, transparent)" }}>
+              <span className="font-mono text-[11px]" style={{ color: "var(--duo-fg)", opacity: 0.7 }}>
                 Round {currentRound}/{maxRounds}
               </span>
               <div className="flex gap-1">
@@ -171,7 +195,7 @@ export default function Home() {
                     className="h-1 w-3 rounded-full transition-colors"
                     style={{ background: i < currentRound
                       ? "var(--duo-fg)"
-                      : "color-mix(in srgb, var(--duo-fg) 12%, transparent)" }}
+                      : "rgba(128,128,128,0.15)" }}
                   />
                 ))}
               </div>
@@ -181,20 +205,20 @@ export default function Home() {
           {status === "converged" && (
             <div className="flex items-center gap-2">
               <div className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--duo-fg)" }} />
-              <span className="font-mono text-[11px]" style={{ color: "color-mix(in srgb, var(--duo-fg) 70%, transparent)" }}>
+              <span className="font-mono text-[11px]" style={{ color: "var(--duo-fg)", opacity: 0.7 }}>
                 Converged in {currentRound} round{currentRound !== 1 ? "s" : ""}
               </span>
             </div>
           )}
 
           {status === "stopped" && finalSolution && (
-            <span className="font-mono text-[11px]" style={{ color: "color-mix(in srgb, var(--duo-fg) 50%, transparent)" }}>
+            <span className="font-mono text-[11px]" style={{ color: "var(--duo-fg)", opacity: 0.5 }}>
               Stopped at round {currentRound}
             </span>
           )}
 
           {status === "error" && (
-            <span className="font-mono text-[11px]" style={{ color: "color-mix(in srgb, var(--duo-fg) 50%, transparent)" }}>
+            <span className="font-mono text-[11px]" style={{ color: "var(--duo-fg)", opacity: 0.5 }}>
               Error
             </span>
           )}
@@ -202,7 +226,7 @@ export default function Home() {
 
         <div className="flex items-center gap-4">
           <span className="hidden font-mono text-[10px] tracking-wide sm:block"
-                style={{ color: "color-mix(in srgb, var(--duo-fg) 25%, transparent)" }}>
+                style={{ color: "var(--duo-fg)", opacity: 0.25 }}>
             adversarial code refinement
           </span>
           <ThemeSwitcher />
@@ -220,8 +244,8 @@ export default function Home() {
       {/* Error */}
       {error && (
         <div className="px-5 py-2"
-             style={{ borderBottom: "1px solid color-mix(in srgb, var(--duo-fg) 12%, transparent)" }}>
-          <span className="font-mono text-xs" style={{ color: "color-mix(in srgb, var(--duo-fg) 60%, transparent)" }}>
+             style={{ borderBottom: "1px solid rgba(128,128,128,0.15)" }}>
+          <span className="font-mono text-xs" style={{ color: "var(--duo-fg)", opacity: 0.6 }}>
             {error}
           </span>
         </div>
@@ -233,21 +257,21 @@ export default function Home() {
           <div className="flex flex-col items-center gap-4">
             <div className="flex items-center gap-4">
               <div className="flex h-10 w-10 items-center justify-center rounded"
-                   style={{ border: "1px solid color-mix(in srgb, var(--duo-fg) 15%, transparent)" }}>
-                <span className="font-mono text-xs" style={{ color: "color-mix(in srgb, var(--duo-fg) 35%, transparent)" }}>A</span>
+                   style={{ border: "1px solid rgba(128,128,128,0.15)" }}>
+                <span className="font-mono text-xs" style={{ color: "var(--duo-fg)", opacity: 0.35 }}>A</span>
               </div>
               <div className="flex flex-col items-center gap-1">
-                <div className="h-px w-8" style={{ background: "color-mix(in srgb, var(--duo-fg) 15%, transparent)" }} />
-                <span className="font-mono text-[9px]" style={{ color: "color-mix(in srgb, var(--duo-fg) 25%, transparent)" }}>vs</span>
-                <div className="h-px w-8" style={{ background: "color-mix(in srgb, var(--duo-fg) 15%, transparent)" }} />
+                <div className="h-px w-8" style={{ background: "rgba(128,128,128,0.15)" }} />
+                <span className="font-mono text-[9px]" style={{ color: "var(--duo-fg)", opacity: 0.25 }}>vs</span>
+                <div className="h-px w-8" style={{ background: "rgba(128,128,128,0.15)" }} />
               </div>
               <div className="flex h-10 w-10 items-center justify-center rounded"
-                   style={{ border: "1px solid color-mix(in srgb, var(--duo-fg) 15%, transparent)" }}>
-                <span className="font-mono text-xs" style={{ color: "color-mix(in srgb, var(--duo-fg) 35%, transparent)" }}>B</span>
+                   style={{ border: "1px solid rgba(128,128,128,0.15)" }}>
+                <span className="font-mono text-xs" style={{ color: "var(--duo-fg)", opacity: 0.35 }}>B</span>
               </div>
             </div>
             <p className="max-w-sm text-center text-sm leading-relaxed"
-               style={{ color: "color-mix(in srgb, var(--duo-fg) 40%, transparent)" }}>
+               style={{ color: "var(--duo-fg)", opacity: 0.4 }}>
               Describe a coding or architecture problem. Two LLMs will debate
               to produce a battle-tested solution.
             </p>
@@ -263,8 +287,9 @@ export default function Home() {
                 onClick={() => handleSubmit(example)}
                 className="rounded px-3 py-1.5 font-mono text-[11px] transition-opacity hover:opacity-80"
                 style={{
-                  border: "1px solid color-mix(in srgb, var(--duo-fg) 15%, transparent)",
-                  color: "color-mix(in srgb, var(--duo-fg) 40%, transparent)",
+                  border: "1px solid rgba(128,128,128,0.15)",
+                  color: "var(--duo-fg)",
+                  opacity: 0.4,
                 }}
               >
                 {example}
@@ -286,12 +311,21 @@ export default function Home() {
           currentRound={currentRound}
           builderModel={settings.builderModel}
           criticModel={settings.criticModel}
+          layoutDirection={settings.layoutDirection}
+          autoScroll={settings.autoScroll}
         />
       )}
 
       {/* Final solution */}
       {finalSolution && (
-        <FinalSolution solution={finalSolution} onNewDebate={handleNewDebate} />
+        <FinalSolution
+          solution={finalSolution}
+          onNewDebate={handleNewDebate}
+          exportFormat={settings.exportFormat}
+          builderRounds={builderRounds}
+          criticRounds={criticRounds}
+          autoScroll={settings.autoScroll}
+        />
       )}
 
       {/* Settings */}
