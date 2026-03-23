@@ -9,6 +9,9 @@ interface CriticPanelProps {
   currentRound: number;
   modelName?: string;
   autoScroll?: boolean;
+  syntaxHighlighting?: boolean;
+  highlightTheme?: string;
+  showLineNumbers?: boolean;
 }
 
 export default function CriticPanel({
@@ -18,6 +21,9 @@ export default function CriticPanel({
   currentRound,
   modelName,
   autoScroll = true,
+  syntaxHighlighting = true,
+  highlightTheme = "auto",
+  showLineNumbers = false,
 }: CriticPanelProps) {
   const hasContent = rounds.length > 0 || isStreaming;
 
@@ -80,7 +86,7 @@ export default function CriticPanel({
                     </span>
                   )}
                 </div>
-                <StreamingText content={r.content} isStreaming={false} autoScroll={autoScroll} />
+                <StreamingText content={r.content} isStreaming={false} autoScroll={autoScroll} syntaxHighlighting={syntaxHighlighting} highlightTheme={highlightTheme} showLineNumbers={showLineNumbers} />
               </div>
             ))}
             {isStreaming && (
@@ -95,7 +101,7 @@ export default function CriticPanel({
                     round {currentRound}
                   </span>
                 </div>
-                <StreamingText content={currentStreamContent} isStreaming={true} autoScroll={autoScroll} />
+                <StreamingText content={currentStreamContent} isStreaming={true} autoScroll={autoScroll} syntaxHighlighting={syntaxHighlighting} highlightTheme={highlightTheme} showLineNumbers={showLineNumbers} />
               </div>
             )}
           </>

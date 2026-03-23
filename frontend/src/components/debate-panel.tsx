@@ -2,6 +2,7 @@
 
 import BuilderPanel from "./builder-panel";
 import CriticPanel from "./critic-panel";
+import type { DiffStyle } from "@/lib/types";
 
 interface RoundData {
   round: number;
@@ -21,6 +22,12 @@ interface DebatePanelProps {
   criticModel?: string;
   layoutDirection: "horizontal" | "vertical";
   autoScroll: boolean;
+  showDiffButtons: boolean;
+  diffStyle: DiffStyle;
+  diffContextLines: number;
+  syntaxHighlighting: boolean;
+  highlightTheme: string;
+  showLineNumbers: boolean;
 }
 
 export default function DebatePanel({
@@ -35,6 +42,12 @@ export default function DebatePanel({
   criticModel,
   layoutDirection,
   autoScroll,
+  showDiffButtons,
+  diffStyle,
+  diffContextLines,
+  syntaxHighlighting,
+  highlightTheme,
+  showLineNumbers,
 }: DebatePanelProps) {
   const isHorizontal = layoutDirection === "horizontal";
 
@@ -54,6 +67,12 @@ export default function DebatePanel({
           currentRound={currentRound}
           modelName={builderModel}
           autoScroll={autoScroll}
+          showDiffButtons={showDiffButtons}
+          diffStyle={diffStyle}
+          diffContextLines={diffContextLines}
+          syntaxHighlighting={syntaxHighlighting}
+          highlightTheme={highlightTheme}
+          showLineNumbers={showLineNumbers}
         />
       </div>
       {isHorizontal && (
@@ -67,6 +86,9 @@ export default function DebatePanel({
           currentRound={currentRound}
           modelName={criticModel}
           autoScroll={autoScroll}
+          syntaxHighlighting={syntaxHighlighting}
+          highlightTheme={highlightTheme}
+          showLineNumbers={showLineNumbers}
         />
       </div>
     </div>

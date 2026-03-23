@@ -4,10 +4,13 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import PromptInput from "@/components/prompt-input";
 import DebatePanel from "@/components/debate-panel";
 import FinalSolution from "@/components/final-solution";
+import JudgePanel from "@/components/judge-panel";
 import ThemeSwitcher from "@/components/theme-switcher";
 import SettingsDialog, { loadSettings } from "@/components/settings-dialog";
+import { HistorySidebar } from "@/components/history-sidebar";
+import { LocalDebateStorage } from "@/lib/history";
 import { startDebate, streamDebate, stopDebate } from "@/lib/api";
-import type { DebateEvent, DebateStatus, Settings } from "@/lib/types";
+import type { DebateEvent, DebateStatus, Settings, SavedDebate } from "@/lib/types";
 
 interface RoundContent {
   round: number;
@@ -15,23 +18,35 @@ interface RoundContent {
   converged: boolean;
 }
 
+interface JudgeRound {
+  round: number;
+  content: string;
+  score?: string;
+}
+
 export default function Home() {
   const [status, setStatus] = useState<DebateStatus>("idle");
   const [builderRounds, setBuilderRounds] = useState<RoundContent[]>([]);
   const [criticRounds, setCriticRounds] = useState<RoundContent[]>([]);
+  const [judgeRounds, setJudgeRounds] = useState<JudgeRound[]>([]);
   const [builderStreamContent, setBuilderStreamContent] = useState("");
   const [criticStreamContent, setCriticStreamContent] = useState("");
+  const [judgeStreamContent, setJudgeStreamContent] = useState("");
   const [builderStreaming, setBuilderStreaming] = useState(false);
   const [criticStreaming, setCriticStreaming] = useState(false);
+  const [judgeStreaming, setJudgeStreaming] = useState(false);
   const [currentRound, setCurrentRound] = useState(0);
   const [finalSolution, setFinalSolution] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [error, setError] = useState<string | null>(null);
+  const [currentPrompt, setCurrentPrompt] = useState("");
   const debateIdRef = useRef<string | null>(null);
   const closeStreamRef = useRef<(() => void) | null>(null);
   const builderStreamRef = useRef("");
   const criticStreamRef = useRef("");
+  const judgeStreamRef = useRef("");
 
   // Apply appearance settings
   useEffect(() => {
@@ -45,16 +60,41 @@ export default function Home() {
   const resetState = useCallback(() => {
     setBuilderRounds([]);
     setCriticRounds([]);
+    setJudgeRounds([]);
     setBuilderStreamContent("");
     setCriticStreamContent("");
+    setJudgeStreamContent("");
     setBuilderStreaming(false);
     setCriticStreaming(false);
+    setJudgeStreaming(false);
     setCurrentRound(0);
     setFinalSolution(null);
     setError(null);
     builderStreamRef.current = "";
     criticStreamRef.current = "";
+    judgeStreamRef.current = "";
   }, []);
+
+  // Auto-save debate on completion
+  const saveDebate = useCallback((completedStatus: DebateStatus, solution: string | null) => {
+    if (!settings.autoSaveDebates) return;
+    if (!settings.saveIncomplete && completedStatus !== "converged" && completedStatus !== "stopped") return;
+    if (completedStatus === "stopped" && !solution && !settings.saveIncomplete) return;
+
+    const storage = new LocalDebateStorage(settings.maxSavedDebates);
+    const saved: SavedDebate = {
+      id: debateIdRef.current || crypto.randomUUID(),
+      prompt: currentPrompt,
+      builderRounds: builderRounds,
+      criticRounds: criticRounds,
+      judgeRounds: judgeRounds,
+      finalSolution: solution,
+      status: completedStatus,
+      settings: { builderModel: settings.builderModel, criticModel: settings.criticModel },
+      timestamp: Date.now(),
+    };
+    storage.save(saved);
+  }, [settings, currentPrompt, builderRounds, criticRounds, judgeRounds]);
 
   const handleEvent = useCallback((event: DebateEvent) => {
     switch (event.type) {
@@ -64,6 +104,7 @@ export default function Home() {
         setBuilderStreamContent("");
         setBuilderStreaming(true);
         setCriticStreaming(false);
+        setJudgeStreaming(false);
         break;
       case "builder_chunk":
         builderStreamRef.current += event.content || "";
@@ -100,6 +141,26 @@ export default function Home() {
         setCriticStreamContent("");
         break;
       }
+      case "judge_start":
+        judgeStreamRef.current = "";
+        setJudgeStreamContent("");
+        setJudgeStreaming(true);
+        break;
+      case "judge_chunk":
+        judgeStreamRef.current += event.content || "";
+        setJudgeStreamContent(judgeStreamRef.current);
+        break;
+      case "judge_end": {
+        const judgeContent = judgeStreamRef.current;
+        setJudgeStreaming(false);
+        setJudgeRounds((prev) => [
+          ...prev,
+          { round: event.round || 0, content: judgeContent, score: event.score || undefined },
+        ]);
+        judgeStreamRef.current = "";
+        setJudgeStreamContent("");
+        break;
+      }
       case "converged":
         setStatus("converged");
         setFinalSolution(event.final_solution || "");
@@ -118,9 +179,17 @@ export default function Home() {
     }
   }, []);
 
+  // Save when debate completes
+  useEffect(() => {
+    if (status === "converged" || (status === "stopped" && finalSolution)) {
+      saveDebate(status, finalSolution);
+    }
+  }, [status, finalSolution, saveDebate]);
+
   const handleSubmit = useCallback(
     async (prompt: string) => {
       resetState();
+      setCurrentPrompt(prompt);
       setStatus("running");
       try {
         const { debate_id } = await startDebate({
@@ -134,6 +203,10 @@ export default function Home() {
           builder_system_prompt: settings.builderSystemPrompt || undefined,
           critic_system_prompt: settings.criticSystemPrompt || undefined,
           convergence_keyword: settings.convergenceKeyword,
+          judge_model: settings.judgeMode !== "off" ? settings.judgeModel : undefined,
+          judge_mode: settings.judgeMode,
+          judge_system_prompt: settings.judgeSystemPrompt || undefined,
+          judge_scoring_scale: settings.judgeScoringScale,
         });
         debateIdRef.current = debate_id;
         const close = streamDebate(debate_id, handleEvent, (err) => {
@@ -161,72 +234,60 @@ export default function Home() {
     setStatus("idle");
   }, [resetState]);
 
+  const handleLoadDebate = useCallback((debate: SavedDebate) => {
+    resetState();
+    setCurrentPrompt(debate.prompt);
+    setBuilderRounds(debate.builderRounds);
+    setCriticRounds(debate.criticRounds);
+    setJudgeRounds(debate.judgeRounds || []);
+    setFinalSolution(debate.finalSolution);
+    setStatus(debate.status);
+  }, [resetState]);
+
   const maxRounds = settings.maxRounds;
   const isIdle = status === "idle";
+  const showJudge = settings.judgeMode !== "off" && (judgeRounds.length > 0 || judgeStreaming);
 
   return (
-    <div
-      className="flex h-screen flex-col"
-      style={{
-        background: "var(--duo-bg)",
-        color: "var(--duo-fg)",
-        fontSize: `${settings.fontSize}px`,
-      }}
-    >
+    <div className="flex h-screen flex-col" style={{ background: "var(--duo-bg)", color: "var(--duo-fg)", fontSize: `${settings.fontSize}px` }}>
       {/* Header */}
-      <header className="flex items-center justify-between px-5 py-3"
-              style={{ borderBottom: "1px solid rgba(128,128,128,0.15)" }}>
+      <header className="flex items-center justify-between px-5 py-3" style={{ borderBottom: "1px solid rgba(128,128,128,0.15)" }}>
         <div className="flex items-center gap-4">
-          <h1 className="font-mono text-base font-bold tracking-widest"
-              style={{ color: "var(--duo-fg)" }}>
+          <h1 className="font-mono text-base font-bold tracking-widest" style={{ color: "var(--duo-fg)" }}>
             Due<span style={{ color: "var(--duo-fg)", opacity: 0.4 }}>LLM</span>
           </h1>
 
           {status === "running" && (
             <div className="flex items-center gap-2">
               <div className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: "var(--duo-fg)" }} />
-              <span className="font-mono text-[11px]" style={{ color: "var(--duo-fg)", opacity: 0.7 }}>
-                Round {currentRound}/{maxRounds}
-              </span>
+              <span className="font-mono text-[11px]" style={{ color: "var(--duo-fg)", opacity: 0.7 }}>Round {currentRound}/{maxRounds}</span>
               <div className="flex gap-1">
                 {Array.from({ length: maxRounds }, (_, i) => (
-                  <div
-                    key={i}
-                    className="h-1 w-3 rounded-full transition-colors"
-                    style={{ background: i < currentRound
-                      ? "var(--duo-fg)"
-                      : "rgba(128,128,128,0.15)" }}
-                  />
+                  <div key={i} className="h-1 w-3 rounded-full transition-colors" style={{ background: i < currentRound ? "var(--duo-fg)" : "rgba(128,128,128,0.15)" }} />
                 ))}
               </div>
             </div>
           )}
-
           {status === "converged" && (
-            <div className="flex items-center gap-2">
-              <div className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--duo-fg)" }} />
-              <span className="font-mono text-[11px]" style={{ color: "var(--duo-fg)", opacity: 0.7 }}>
-                Converged in {currentRound} round{currentRound !== 1 ? "s" : ""}
-              </span>
-            </div>
+            <span className="font-mono text-[11px]" style={{ color: "var(--duo-fg)", opacity: 0.7 }}>
+              Converged in {currentRound} round{currentRound !== 1 ? "s" : ""}
+            </span>
           )}
-
           {status === "stopped" && finalSolution && (
-            <span className="font-mono text-[11px]" style={{ color: "var(--duo-fg)", opacity: 0.5 }}>
-              Stopped at round {currentRound}
-            </span>
+            <span className="font-mono text-[11px]" style={{ color: "var(--duo-fg)", opacity: 0.5 }}>Stopped at round {currentRound}</span>
           )}
-
           {status === "error" && (
-            <span className="font-mono text-[11px]" style={{ color: "var(--duo-fg)", opacity: 0.5 }}>
-              Error
-            </span>
+            <span className="font-mono text-[11px]" style={{ color: "var(--duo-fg)", opacity: 0.5 }}>Error</span>
           )}
         </div>
 
         <div className="flex items-center gap-4">
-          <span className="hidden font-mono text-[10px] tracking-wide sm:block"
-                style={{ color: "var(--duo-fg)", opacity: 0.25 }}>
+          {settings.autoSaveDebates && (
+            <button onClick={() => setHistoryOpen(true)} className="font-mono text-[10px] tracking-wide transition-opacity hover:opacity-70" style={{ color: "var(--duo-fg)", opacity: 0.25 }}>
+              history
+            </button>
+          )}
+          <span className="hidden font-mono text-[10px] tracking-wide sm:block" style={{ color: "var(--duo-fg)", opacity: 0.25 }}>
             adversarial code refinement
           </span>
           <ThemeSwitcher />
@@ -234,20 +295,12 @@ export default function Home() {
       </header>
 
       {/* Prompt */}
-      <PromptInput
-        onSubmit={handleSubmit}
-        onStop={handleStop}
-        isRunning={status === "running"}
-        onOpenSettings={() => setSettingsOpen(true)}
-      />
+      <PromptInput onSubmit={handleSubmit} onStop={handleStop} isRunning={status === "running"} onOpenSettings={() => setSettingsOpen(true)} />
 
       {/* Error */}
       {error && (
-        <div className="px-5 py-2"
-             style={{ borderBottom: "1px solid rgba(128,128,128,0.15)" }}>
-          <span className="font-mono text-xs" style={{ color: "var(--duo-fg)", opacity: 0.6 }}>
-            {error}
-          </span>
+        <div className="px-5 py-2" style={{ borderBottom: "1px solid rgba(128,128,128,0.15)" }}>
+          <span className="font-mono text-xs" style={{ color: "var(--duo-fg)", opacity: 0.6 }}>{error}</span>
         </div>
       )}
 
@@ -256,8 +309,7 @@ export default function Home() {
         <div className="flex flex-1 flex-col items-center justify-center gap-8 px-4">
           <div className="flex flex-col items-center gap-4">
             <div className="flex items-center gap-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded"
-                   style={{ border: "1px solid rgba(128,128,128,0.15)" }}>
+              <div className="flex h-10 w-10 items-center justify-center rounded" style={{ border: "1px solid rgba(128,128,128,0.15)" }}>
                 <span className="font-mono text-xs" style={{ color: "var(--duo-fg)", opacity: 0.35 }}>A</span>
               </div>
               <div className="flex flex-col items-center gap-1">
@@ -265,33 +317,17 @@ export default function Home() {
                 <span className="font-mono text-[9px]" style={{ color: "var(--duo-fg)", opacity: 0.25 }}>vs</span>
                 <div className="h-px w-8" style={{ background: "rgba(128,128,128,0.15)" }} />
               </div>
-              <div className="flex h-10 w-10 items-center justify-center rounded"
-                   style={{ border: "1px solid rgba(128,128,128,0.15)" }}>
+              <div className="flex h-10 w-10 items-center justify-center rounded" style={{ border: "1px solid rgba(128,128,128,0.15)" }}>
                 <span className="font-mono text-xs" style={{ color: "var(--duo-fg)", opacity: 0.35 }}>B</span>
               </div>
             </div>
-            <p className="max-w-sm text-center text-sm leading-relaxed"
-               style={{ color: "var(--duo-fg)", opacity: 0.4 }}>
-              Describe a coding or architecture problem. Two LLMs will debate
-              to produce a battle-tested solution.
+            <p className="max-w-sm text-center text-sm leading-relaxed" style={{ color: "var(--duo-fg)", opacity: 0.4 }}>
+              Describe a coding or architecture problem. Two LLMs will debate to produce a battle-tested solution.
             </p>
           </div>
           <div className="flex flex-wrap justify-center gap-2">
-            {[
-              "Design a rate limiter in Python",
-              "Build a pub/sub event system",
-              "Implement JWT auth middleware",
-            ].map((example) => (
-              <button
-                key={example}
-                onClick={() => handleSubmit(example)}
-                className="rounded px-3 py-1.5 font-mono text-[11px] transition-opacity hover:opacity-80"
-                style={{
-                  border: "1px solid rgba(128,128,128,0.15)",
-                  color: "var(--duo-fg)",
-                  opacity: 0.4,
-                }}
-              >
+            {["Design a rate limiter in Python", "Build a pub/sub event system", "Implement JWT auth middleware"].map((example) => (
+              <button key={example} onClick={() => handleSubmit(example)} className="rounded px-3 py-1.5 font-mono text-[11px] transition-opacity hover:opacity-80" style={{ border: "1px solid rgba(128,128,128,0.15)", color: "var(--duo-fg)", opacity: 0.4 }}>
                 {example}
               </button>
             ))}
@@ -313,6 +349,27 @@ export default function Home() {
           criticModel={settings.criticModel}
           layoutDirection={settings.layoutDirection}
           autoScroll={settings.autoScroll}
+          showDiffButtons={settings.showDiffButtons}
+          diffStyle={settings.diffStyle}
+          diffContextLines={settings.diffContextLines}
+          syntaxHighlighting={settings.syntaxHighlighting}
+          highlightTheme={settings.highlightTheme}
+          showLineNumbers={settings.showLineNumbers}
+        />
+      )}
+
+      {/* Judge panel */}
+      {showJudge && (
+        <JudgePanel
+          rounds={judgeRounds}
+          isStreaming={judgeStreaming}
+          currentStreamContent={judgeStreamContent}
+          currentRound={currentRound}
+          mode={settings.judgeMode as "per_round" | "post_debate"}
+          modelName={settings.judgeModel}
+          autoScroll={settings.autoScroll}
+          syntaxHighlighting={settings.syntaxHighlighting}
+          highlightTheme={settings.highlightTheme}
         />
       )}
 
@@ -329,11 +386,10 @@ export default function Home() {
       )}
 
       {/* Settings */}
-      <SettingsDialog
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        onSave={setSettings}
-      />
+      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} onSave={setSettings} />
+
+      {/* History sidebar */}
+      <HistorySidebar open={historyOpen} onClose={() => setHistoryOpen(false)} onLoad={handleLoadDebate} maxSavedDebates={settings.maxSavedDebates} />
     </div>
   );
 }

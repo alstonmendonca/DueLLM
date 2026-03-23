@@ -1,14 +1,23 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import CodeBlock from "./code-block";
 
 interface StreamingTextProps {
   content: string;
   isStreaming: boolean;
   autoScroll?: boolean;
+  syntaxHighlighting?: boolean;
+  highlightTheme?: string;
+  showLineNumbers?: boolean;
 }
 
-function formatContent(raw: string): React.ReactNode[] {
+function formatContent(
+  raw: string,
+  syntaxHighlighting: boolean,
+  highlightTheme: string,
+  showLineNumbers: boolean
+): React.ReactNode[] {
   const parts = raw.split(/(```[\s\S]*?```)/g);
   return parts.map((part, i) => {
     if (part.startsWith("```") && part.endsWith("```")) {
@@ -17,22 +26,14 @@ function formatContent(raw: string): React.ReactNode[] {
       const lang = newlineIdx > -1 ? inner.slice(0, newlineIdx).trim() : "";
       const code = newlineIdx > -1 ? inner.slice(newlineIdx + 1) : inner;
       return (
-        <div key={i} className="my-3">
-          {lang && (
-            <div className="rounded-t border border-b-0 px-3 py-1"
-                 style={{ borderColor: "rgba(128,128,128,0.15)" }}>
-              <span className="font-mono text-[10px]" style={{ color: "var(--duo-fg)", opacity: 0.4 }}>
-                {lang}
-              </span>
-            </div>
-          )}
-          <pre className={`overflow-x-auto p-3 leading-relaxed ${lang ? "rounded-b" : "rounded"}`}
-               style={{ border: "1px solid rgba(128,128,128,0.15)", backgroundColor: "rgba(128,128,128,0.05)", fontSize: "inherit" }}>
-            <code className="font-mono" style={{ color: "var(--duo-fg)", opacity: 0.85 }}>
-              {code}
-            </code>
-          </pre>
-        </div>
+        <CodeBlock
+          key={i}
+          code={code}
+          language={lang}
+          highlightEnabled={syntaxHighlighting}
+          theme={highlightTheme}
+          showLineNumbers={showLineNumbers}
+        />
       );
     }
 
@@ -65,7 +66,14 @@ function formatContent(raw: string): React.ReactNode[] {
   });
 }
 
-export default function StreamingText({ content, isStreaming, autoScroll = true }: StreamingTextProps) {
+export default function StreamingText({
+  content,
+  isStreaming,
+  autoScroll = true,
+  syntaxHighlighting = true,
+  highlightTheme = "auto",
+  showLineNumbers = false,
+}: StreamingTextProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -76,7 +84,7 @@ export default function StreamingText({ content, isStreaming, autoScroll = true 
 
   return (
     <div className="px-4 py-3 leading-relaxed" style={{ color: "var(--duo-fg)", opacity: 0.75, fontSize: "inherit" }}>
-      {formatContent(content)}
+      {formatContent(content, syntaxHighlighting, highlightTheme, showLineNumbers)}
       {isStreaming && (
         <span className="ml-0.5 inline-block h-3.5 w-[2px] animate-pulse" style={{ backgroundColor: "var(--duo-fg)" }} />
       )}

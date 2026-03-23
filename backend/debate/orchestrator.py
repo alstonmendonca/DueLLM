@@ -51,12 +51,54 @@ DEFAULT_CRITIC_SYSTEM_PROMPT_TEMPLATE = (
     "the solution is production-ready."
 )
 
+DEFAULT_JUDGE_SYSTEM_PROMPT_TEMPLATE = (
+    "You are a neutral judge evaluating a code debate between a Builder and a Critic. "
+    "Score the solution on a scale of {scale}. Consider:\n"
+    "- Correctness and completeness\n"
+    "- Code quality and best practices\n"
+    "- How well the Builder addressed the Critic's feedback\n"
+    "- Whether the final solution is production-ready\n\n"
+    "Provide your score first, then explain your reasoning concisely.\n"
+    "Format: \"SCORE: X/{max}\" followed by your analysis."
+)
+
 
 def _build_critic_system_prompt(convergence_keyword: str, custom_prompt: str | None) -> str:
     """Build the critic system prompt, injecting the convergence keyword."""
     if custom_prompt:
         return custom_prompt
     return DEFAULT_CRITIC_SYSTEM_PROMPT_TEMPLATE.format(keyword=convergence_keyword)
+
+
+def _build_judge_system_prompt(scoring_scale: str, custom_prompt: str | None) -> str:
+    """Build the judge system prompt, injecting the scoring scale."""
+    if custom_prompt:
+        return custom_prompt
+
+    # Determine max value from scale
+    max_val = "10"
+    if scoring_scale.lower() == "pass/fail":
+        max_val = "Pass or Fail"
+    elif "-" in scoring_scale:
+        parts = scoring_scale.split("-")
+        if len(parts) == 2:
+            max_val = parts[1]
+
+    return DEFAULT_JUDGE_SYSTEM_PROMPT_TEMPLATE.format(
+        scale=scoring_scale,
+        max=max_val
+    )
+
+
+def _extract_score(judge_response: str) -> str | None:
+    """Extract the score from a judge response by looking for 'SCORE:' prefix."""
+    lines = judge_response.split("\n")
+    for line in lines:
+        if "SCORE:" in line.upper():
+            # Extract everything after SCORE: on that line
+            score_part = line.split(":", 1)[1].strip() if ":" in line else ""
+            return score_part
+    return None
 
 
 async def run_debate(
@@ -84,6 +126,16 @@ async def run_debate(
     convergence_keyword = request.convergence_keyword
     builder_system_prompt = request.builder_system_prompt or DEFAULT_BUILDER_SYSTEM_PROMPT
     critic_system_prompt = _build_critic_system_prompt(convergence_keyword, request.critic_system_prompt)
+
+    # Judge setup
+    judge_mode = request.judge_mode
+    judge_model_raw = request.judge_model or settings.default_builder_model
+    judge_provider = provider_for_model(judge_model_raw)
+    judge_model = strip_provider_prefix(judge_model_raw)
+    judge_system_prompt = _build_judge_system_prompt(
+        request.judge_scoring_scale,
+        request.judge_system_prompt
+    )
 
     builder_messages: list[dict] = []
     critic_messages: list[dict] = []
@@ -194,6 +246,58 @@ async def run_debate(
             type="critic_end", round=round_num, converged=converged
         )
 
+        # --- Judge turn (per-round mode) ---
+        if judge_mode == "per_round":
+            if cancel_check():
+                yield DebateEvent(type="stopped", round=round_num)
+                return
+
+            yield DebateEvent(type="judge_start", round=round_num, mode="per_round")
+
+            judge_prompt = _build_judge_prompt_per_round(
+                request.prompt,
+                last_builder_response,
+                critic_response,
+                round_num
+            )
+
+            judge_response = ""
+            cancelled = False
+            try:
+                async for chunk in judge_provider.generate_stream(
+                    messages=[{"role": "user", "content": judge_prompt}],
+                    system_prompt=judge_system_prompt,
+                    model_id=judge_model,
+                    temperature=request.temperature,
+                    max_tokens=request.max_tokens,
+                    top_p=request.top_p,
+                ):
+                    if cancel_check():
+                        cancelled = True
+                        break
+                    judge_response += chunk
+                    yield DebateEvent(
+                        type="judge_chunk", round=round_num, content=chunk
+                    )
+            except Exception as exc:
+                logger.error("Judge error in round %d: %s", round_num, exc)
+                yield DebateEvent(
+                    type="error", round=round_num, content=f"Judge error: {str(exc)}"
+                )
+                return
+
+            if cancelled:
+                yield DebateEvent(type="stopped", round=round_num)
+                return
+
+            score = _extract_score(judge_response)
+            yield DebateEvent(
+                type="judge_end",
+                round=round_num,
+                score=score,
+                mode="per_round"
+            )
+
         if converged:
             yield DebateEvent(
                 type="converged",
@@ -201,6 +305,56 @@ async def run_debate(
                 converged=True,
                 final_solution=last_builder_response,
             )
+
+            # --- Judge turn (post-debate mode after convergence) ---
+            if judge_mode == "post_debate":
+                if cancel_check():
+                    return
+
+                yield DebateEvent(type="judge_start", round=round_num, mode="post_debate")
+
+                judge_prompt = _build_judge_prompt_post_debate(
+                    request.prompt,
+                    builder_messages,
+                    critic_messages
+                )
+
+                judge_response = ""
+                cancelled = False
+                try:
+                    async for chunk in judge_provider.generate_stream(
+                        messages=[{"role": "user", "content": judge_prompt}],
+                        system_prompt=judge_system_prompt,
+                        model_id=judge_model,
+                        temperature=request.temperature,
+                        max_tokens=request.max_tokens,
+                        top_p=request.top_p,
+                    ):
+                        if cancel_check():
+                            cancelled = True
+                            break
+                        judge_response += chunk
+                        yield DebateEvent(
+                            type="judge_chunk", round=round_num, content=chunk
+                        )
+                except Exception as exc:
+                    logger.error("Judge error post-debate: %s", exc)
+                    yield DebateEvent(
+                        type="error", round=round_num, content=f"Judge error: {str(exc)}"
+                    )
+                    return
+
+                if cancelled:
+                    return
+
+                score = _extract_score(judge_response)
+                yield DebateEvent(
+                    type="judge_end",
+                    round=round_num,
+                    score=score,
+                    mode="post_debate"
+                )
+
             return
 
     # Max rounds reached without convergence
@@ -209,6 +363,55 @@ async def run_debate(
         round=max_rounds,
         final_solution=last_builder_response,
     )
+
+    # --- Judge turn (post-debate mode) ---
+    if judge_mode == "post_debate":
+        if cancel_check():
+            return
+
+        yield DebateEvent(type="judge_start", round=max_rounds, mode="post_debate")
+
+        judge_prompt = _build_judge_prompt_post_debate(
+            request.prompt,
+            builder_messages,
+            critic_messages
+        )
+
+        judge_response = ""
+        cancelled = False
+        try:
+            async for chunk in judge_provider.generate_stream(
+                messages=[{"role": "user", "content": judge_prompt}],
+                system_prompt=judge_system_prompt,
+                model_id=judge_model,
+                temperature=request.temperature,
+                max_tokens=request.max_tokens,
+                top_p=request.top_p,
+            ):
+                if cancel_check():
+                    cancelled = True
+                    break
+                judge_response += chunk
+                yield DebateEvent(
+                    type="judge_chunk", round=max_rounds, content=chunk
+                )
+        except Exception as exc:
+            logger.error("Judge error post-debate: %s", exc)
+            yield DebateEvent(
+                type="error", round=max_rounds, content=f"Judge error: {str(exc)}"
+            )
+            return
+
+        if cancelled:
+            return
+
+        score = _extract_score(judge_response)
+        yield DebateEvent(
+            type="judge_end",
+            round=max_rounds,
+            score=score,
+            mode="post_debate"
+        )
 
 
 def _build_builder_prompt(
@@ -262,3 +465,54 @@ def _build_critic_prompt(
         )
 
     return base
+
+
+def _build_judge_prompt_per_round(
+    original_prompt: str,
+    builder_response: str,
+    critic_response: str,
+    round_num: int,
+) -> str:
+    """Build the judge prompt for per-round evaluation."""
+    return (
+        f"Original task: {original_prompt}\n\n"
+        f"--- Round {round_num} Builder Solution ---\n"
+        f"{builder_response}\n\n"
+        f"--- Round {round_num} Critic Feedback ---\n"
+        f"{critic_response}\n\n"
+        f"Evaluate the Builder's solution and the Critic's feedback for this round."
+    )
+
+
+def _build_judge_prompt_post_debate(
+    original_prompt: str,
+    builder_messages: list[dict],
+    critic_messages: list[dict],
+) -> str:
+    """Build the judge prompt for post-debate evaluation."""
+    transcript_parts = [f"Original task: {original_prompt}\n"]
+
+    # Interleave builder and critic messages by round
+    max_messages = max(len(builder_messages), len(critic_messages))
+    round_num = 1
+
+    for i in range(0, max_messages, 2):
+        if i < len(builder_messages) and builder_messages[i]["role"] == "assistant":
+            transcript_parts.append(
+                f"\n--- Round {round_num} Builder Solution ---\n"
+                f"{builder_messages[i]['content']}\n"
+            )
+
+        if i + 1 < len(critic_messages) and critic_messages[i + 1]["role"] == "assistant":
+            transcript_parts.append(
+                f"\n--- Round {round_num} Critic Feedback ---\n"
+                f"{critic_messages[i + 1]['content']}\n"
+            )
+
+        round_num += 1
+
+    transcript_parts.append(
+        "\n\nEvaluate the final solution based on the complete debate transcript above."
+    )
+
+    return "".join(transcript_parts)

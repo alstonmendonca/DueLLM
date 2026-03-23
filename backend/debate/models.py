@@ -27,6 +27,10 @@ class DebateRequest(BaseModel):
     builder_system_prompt: Optional[str] = None
     critic_system_prompt: Optional[str] = None
     convergence_keyword: str = Field(default="CONVERGED")
+    judge_model: Optional[str] = None
+    judge_mode: str = Field(default="off")  # "off", "post_debate", "per_round"
+    judge_system_prompt: Optional[str] = None
+    judge_scoring_scale: str = Field(default="1-10")
 
 
 class DebateEvent(BaseModel):
@@ -37,6 +41,8 @@ class DebateEvent(BaseModel):
     content: Optional[str] = None
     converged: Optional[bool] = None
     final_solution: Optional[str] = None
+    score: Optional[str] = None
+    mode: Optional[str] = None
 
 
 class DebateMessage(BaseModel):

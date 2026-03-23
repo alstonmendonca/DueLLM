@@ -19,6 +19,7 @@ from backend.debate.models import (
 from backend.debate.orchestrator import (
     DEFAULT_BUILDER_SYSTEM_PROMPT,
     DEFAULT_CRITIC_SYSTEM_PROMPT_TEMPLATE,
+    DEFAULT_JUDGE_SYSTEM_PROMPT_TEMPLATE,
     run_debate,
 )
 from backend.providers.bedrock import BedrockProvider
@@ -83,6 +84,10 @@ async def get_defaults() -> dict:
         "critic_system_prompt": DEFAULT_CRITIC_SYSTEM_PROMPT_TEMPLATE.format(
             keyword="CONVERGED"
         ),
+        "judge_system_prompt": DEFAULT_JUDGE_SYSTEM_PROMPT_TEMPLATE.format(
+            scale="1-10",
+            max="10"
+        ),
         "convergence_keyword": "CONVERGED",
         "max_tokens": 4096,
         "top_p": 1.0,
@@ -145,7 +150,10 @@ async def stream_debate(debate_id: str) -> EventSourceResponse:
                 elif event.type == "critic_start":
                     current_role = "critic"
                     accumulated_content = ""
-                elif event.type in ("builder_chunk", "critic_chunk"):
+                elif event.type == "judge_start":
+                    current_role = "judge"
+                    accumulated_content = ""
+                elif event.type in ("builder_chunk", "critic_chunk", "judge_chunk"):
                     accumulated_content += event.content or ""
                 elif event.type in ("builder_end", "critic_end"):
                     msg = DebateMessage(
@@ -158,6 +166,10 @@ async def stream_debate(debate_id: str) -> EventSourceResponse:
                         .with_message(msg)
                         .with_rounds(current_round)
                     )
+                elif event.type == "judge_end":
+                    # Optionally store judge content if needed
+                    # For now, just pass it through to the frontend
+                    pass
                 elif event.type == "converged":
                     _debates[debate_id] = _debates[
                         debate_id
