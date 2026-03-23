@@ -11,12 +11,15 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { getModels, getDefaults } from "@/lib/api";
-import type { Settings, BedrockModel, Defaults, DebatePreset } from "@/lib/types";
+import type { Settings, BedrockModel, Defaults, DebatePreset, Provider } from "@/lib/types";
 
 const STORAGE_KEY = "duellm-settings";
 const PRESETS_KEY = "duellm-presets";
 
 const DEFAULT_SETTINGS: Settings = {
+  builderProvider: "bedrock",
+  criticProvider: "bedrock",
+  sameProvider: true,
   builderModel: "us.anthropic.claude-sonnet-4-6",
   criticModel: "us.anthropic.claude-haiku-4-5-20251001-v1:0",
   maxRounds: 5,
@@ -135,52 +138,94 @@ export default function SettingsDialog({
     { key: "appearance", label: "Appearance" },
   ];
 
-  const modelSelect = (
+  const ollamaModels = models.filter((m) => m.model_id.startsWith("ollama:"));
+  const bedrockModels = models.filter((m) => !m.model_id.startsWith("ollama:"));
+  const hasOllama = ollamaModels.length > 0;
+
+  const modelsForProvider = (provider: Provider) =>
+    provider === "ollama" ? ollamaModels : bedrockModels;
+
+  const providerToggle = (
     label: string,
-    value: string,
-    onChange: (v: string) => void
+    value: Provider,
+    onChange: (v: Provider) => void,
+    disabled?: boolean
   ) => (
     <div className="space-y-1.5">
       <Label className="font-mono text-[11px]" style={{ color: "var(--duo-fg)", opacity: 0.4 }}>
         {label}
       </Label>
-      {loadingModels ? (
-        <div className="rounded border px-3 py-2 font-mono text-xs" style={{ borderColor: "var(--duo-fg)", opacity: 0.1, color: "var(--duo-fg)" }}>
-          Loading models...
-        </div>
-      ) : models.length > 0 ? (
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full rounded border px-3 py-2 font-mono text-xs focus:outline-none focus:ring-1"
-          style={{
-            borderColor: "rgba(128,128,128,0.2)",
-            backgroundColor: "var(--duo-bg)",
-            color: "var(--duo-fg)",
-          }}
-        >
-          {models.map((m) => (
-            <option key={m.model_id} value={m.model_id}>
-              {m.model_name} ({m.provider})
-            </option>
-          ))}
-        </select>
-      ) : (
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="e.g. us.anthropic.claude-sonnet-4-6"
-          className="w-full rounded border px-3 py-2 font-mono text-xs focus:outline-none focus:ring-1"
-          style={{
-            borderColor: "rgba(128,128,128,0.2)",
-            backgroundColor: "var(--duo-bg)",
-            color: "var(--duo-fg)",
-          }}
-        />
-      )}
+      <div className="flex gap-1">
+        {(["bedrock", "ollama"] as const).map((p) => (
+          <button
+            key={p}
+            onClick={() => !disabled && onChange(p)}
+            disabled={disabled}
+            className="rounded border px-2.5 py-1 font-mono text-[11px] transition-colors disabled:cursor-not-allowed"
+            style={{
+              borderColor: "rgba(128,128,128,0.2)",
+              backgroundColor: value === p ? "var(--duo-fg)" : "transparent",
+              color: value === p ? "var(--duo-bg)" : "var(--duo-fg)",
+              opacity: disabled ? 0.3 : value === p ? 1 : 0.5,
+            }}
+          >
+            {p === "bedrock" ? "Bedrock" : `Ollama${hasOllama ? "" : " (offline)"}`}
+          </button>
+        ))}
+      </div>
     </div>
   );
+
+  const modelSelect = (
+    label: string,
+    value: string,
+    onChange: (v: string) => void,
+    provider: Provider
+  ) => {
+    const filtered = modelsForProvider(provider);
+    return (
+      <div className="space-y-1.5">
+        <Label className="font-mono text-[11px]" style={{ color: "var(--duo-fg)", opacity: 0.4 }}>
+          {label}
+        </Label>
+        {loadingModels ? (
+          <div className="rounded border px-3 py-2 font-mono text-xs" style={{ borderColor: "var(--duo-fg)", opacity: 0.1, color: "var(--duo-fg)" }}>
+            Loading models...
+          </div>
+        ) : filtered.length > 0 ? (
+          <select
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-full rounded border px-3 py-2 font-mono text-xs focus:outline-none focus:ring-1"
+            style={{
+              borderColor: "rgba(128,128,128,0.2)",
+              backgroundColor: "var(--duo-bg)",
+              color: "var(--duo-fg)",
+            }}
+          >
+            {filtered.map((m) => (
+              <option key={m.model_id} value={m.model_id}>
+                {m.model_name} ({m.provider})
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={provider === "ollama" ? "e.g. ollama:llama3" : "e.g. us.anthropic.claude-sonnet-4-6"}
+            className="w-full rounded border px-3 py-2 font-mono text-xs focus:outline-none focus:ring-1"
+            style={{
+              borderColor: "rgba(128,128,128,0.2)",
+              backgroundColor: "var(--duo-bg)",
+              color: "var(--duo-fg)",
+            }}
+          />
+        )}
+      </div>
+    );
+  };
 
   const slider = (
     label: string,
@@ -246,8 +291,54 @@ export default function SettingsDialog({
         <div className="flex max-h-80 flex-col gap-4 overflow-y-auto py-2">
           {tab === "models" && (
             <>
-              {modelSelect("Builder Model (LLM A)", settings.builderModel, (v) => update({ builderModel: v }))}
-              {modelSelect("Critic Model (LLM B)", settings.criticModel, (v) => update({ criticModel: v }))}
+              {/* Same provider toggle */}
+              <div className="flex items-center justify-between">
+                <Label className="font-mono text-[11px]" style={{ color: "var(--duo-fg)", opacity: 0.4 }}>
+                  Same provider for both
+                </Label>
+                <button
+                  onClick={() => {
+                    const next = !settings.sameProvider;
+                    const patch: Partial<Settings> = { sameProvider: next };
+                    if (next) {
+                      patch.criticProvider = settings.builderProvider;
+                    }
+                    update(patch);
+                  }}
+                  className="rounded border px-2.5 py-1 font-mono text-[11px] transition-colors"
+                  style={{
+                    borderColor: "rgba(128,128,128,0.2)",
+                    backgroundColor: settings.sameProvider ? "var(--duo-fg)" : "transparent",
+                    color: settings.sameProvider ? "var(--duo-bg)" : "var(--duo-fg)",
+                    opacity: settings.sameProvider ? 1 : 0.5,
+                  }}
+                >
+                  {settings.sameProvider ? "ON" : "OFF"}
+                </button>
+              </div>
+
+              {/* Provider selectors */}
+              {settings.sameProvider ? (
+                providerToggle("Provider", settings.builderProvider, (v) =>
+                  update({ builderProvider: v, criticProvider: v })
+                )
+              ) : (
+                <>
+                  {providerToggle("Builder Provider", settings.builderProvider, (v) =>
+                    update({ builderProvider: v })
+                  )}
+                  {providerToggle("Critic Provider", settings.criticProvider, (v) =>
+                    update({ criticProvider: v })
+                  )}
+                </>
+              )}
+
+              <div className="border-t pt-3" style={{ borderColor: "rgba(128,128,128,0.15)" }} />
+
+              {/* Model selectors */}
+              {modelSelect("Builder Model (LLM A)", settings.builderModel, (v) => update({ builderModel: v }), settings.builderProvider)}
+              {modelSelect("Critic Model (LLM B)", settings.criticModel, (v) => update({ criticModel: v }), settings.criticProvider)}
+
               {slider("Temperature", settings.temperature, 0, 1, 0.1, (v) => update({ temperature: v }), (v) => v.toFixed(1))}
               {slider("Max Tokens", settings.maxTokens, 512, 16384, 512, (v) => update({ maxTokens: v }), (v) => v.toLocaleString())}
               {slider("Top P", settings.topP, 0, 1, 0.05, (v) => update({ topP: v }), (v) => v.toFixed(2))}

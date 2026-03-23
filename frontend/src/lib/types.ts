@@ -48,8 +48,13 @@ export interface BedrockModel {
   provider: string;
 }
 
+export type Provider = "bedrock" | "ollama";
+
 export interface Settings {
   // Models tab
+  builderProvider: Provider;
+  criticProvider: Provider;
+  sameProvider: boolean;
   builderModel: string;
   criticModel: string;
   temperature: number;
